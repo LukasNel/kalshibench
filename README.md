@@ -13,6 +13,7 @@ KalshiBench tests whether language models can make well-calibrated probabilistic
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
+- [Dataset Architecture](#dataset-architecture)
 - [Metrics Explained](#metrics-explained)
 - [Available Models](#available-models)
 - [Output Format](#output-format)
@@ -56,6 +57,7 @@ KalshiBench enables research into:
 
 ## Key Features
 
+- **Pre-cleaned Dataset**: Load the deduplicated KalshiBench dataset directly from HuggingFace
 - **Temporal Filtering**: Automatically uses the latest knowledge cutoff among selected models
 - **20+ Models**: GPT-5.2, Claude Opus 4.5, o1, Gemini, Llama, Qwen, DeepSeek, and more
 - **Comprehensive Metrics**: Brier Score, ECE, calibration curves, overconfidence rates
@@ -80,7 +82,7 @@ KalshiBench enables research into:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone https://github.com/your-org/kalshibench.git
+git clone https://github.com/2084collective/kalshibench.git
 cd kalshibench
 
 # Install dependencies (creates virtual environment automatically)
@@ -95,7 +97,7 @@ uv sync --extra all       # Everything
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/kalshibench.git
+git clone https://github.com/2084collective/kalshibench.git
 cd kalshibench
 
 # Create virtual environment
@@ -121,17 +123,6 @@ TOGETHER_API_KEY=...
 GEMINI_API_KEY=...
 ```
 
-### Running with uv
-
-```bash
-# uv automatically uses the project's virtual environment
-uv run python kalshibench.py --models gpt-4o-mini --samples 10
-
-# Or activate the environment manually
-source .venv/bin/activate
-python kalshibench.py --models gpt-4o-mini --samples 10
-```
-
 ---
 
 ## Quick Start
@@ -140,241 +131,65 @@ python kalshibench.py --models gpt-4o-mini --samples 10
 
 ```bash
 # Load environment and run quick test
-source .env  # or use run_test.sh
-python kalshibench.py --models gpt-4o-mini --samples 10
+bash run_test.sh
+
+# Or manually:
+source .env
+uv run python kalshibench.py --models gpt-4o-mini --samples 10
 ```
 
 ### Basic Evaluation
 
 ```bash
 # Compare a few models
-python kalshibench.py --models gpt-4o claude-sonnet-4.5 --samples 100
+uv run python kalshibench.py --models gpt-4o claude-sonnet-4.5 --samples 100
 
 # List all available models
-python kalshibench.py --list-models
+uv run python kalshibench.py --list-models
 ```
 
 ### Full Research Run
 
 ```bash
 # Run comprehensive benchmark for paper
-python run_neurips_benchmark.py --full
+bash run_full.sh
+
+# Or:
+uv run python run_neurips_benchmark.py --full
 ```
 
 ---
 
 ## How It Works
 
-### 1. Data Source & Dataset Creation
+### 1. Dataset Loading
 
-KalshiBench uses prediction market data from [Kalshi](https://kalshi.com), a CFTC-regulated prediction market platform. The dataset is created using an extensible extraction pipeline that can pull from multiple prediction market platforms.
-
-#### Dataset Creation Architecture
-
-The dataset creation system (`dataset_creator.py`) uses an abstract factory pattern:
+KalshiBench uses a **two-step architecture** for clean, reproducible evaluation:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                PredictionMarketDataOrchestrator                 │
-│  - Coordinates multiple extractors                              │
-│  - Creates unified schema across platforms                      │
-│  - Pushes to HuggingFace Hub                                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ KalshiExtractor │  │PolymarketExtr. │  │ Future Platform │
-│                 │  │                 │  │                 │
-│ - Kalshi API    │  │ - Gamma API     │  │ - Your API      │
-│ - Binary yes/no │  │ - Multi-outcome │  │ - Custom schema │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Dataset Creation (run once by maintainers)                 │
+│  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐   │
+│  │ Raw Kalshi  │ -> │ Deduplicate  │ -> │ kalshibench   │   │
+│  │ API Data    │    │ + Clean      │    │ (HuggingFace) │   │
+│  └─────────────┘    └──────────────┘    └───────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  Benchmark Evaluation (your runs)                           │
+│  ┌───────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ kalshibench   │ -> │ Filter by    │ -> │ Evaluate     │  │
+│  │ (pre-cleaned) │    │ cutoff date  │    │ Models       │  │
+│  └───────────────┘    └──────────────┘    └──────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### Abstract Base Class
+**Default behavior**: Loads from `2084Collective/kalshibench-v2`, a pre-cleaned, deduplicated dataset. This ensures:
+- **Reproducibility**: Everyone uses the exact same questions
+- **Speed**: No deduplication overhead
+- **Versioning**: Dataset versions can be tracked
 
-All extractors inherit from `PredictionMarketDataExtractor`:
-
-```python
-class PredictionMarketDataExtractor(ABC):
-    @abstractmethod
-    def get_market_name(self) -> str:
-        """Return platform name (e.g., 'kalshi', 'polymarket')"""
-        
-    @abstractmethod
-    def fetch_closed_markets(self, max_markets: int) -> list[dict]:
-        """Fetch resolved markets from the platform API"""
-        
-    @abstractmethod
-    def get_dataset_features(self) -> Features:
-        """Return HuggingFace Features schema"""
-        
-    @abstractmethod
-    def to_unified_format(self, market: dict) -> dict:
-        """Convert platform-specific data to unified schema"""
-```
-
-#### Kalshi Data Extraction
-
-The `KalshiDataExtractor` fetches from Kalshi's public API:
-
-```python
-# API endpoint for settled events with nested markets
-url = "https://api.elections.kalshi.com/trade-api/v2/events"
-params = {
-    "status": "settled",      # Only resolved markets
-    "limit": 200,             # Max per page
-    "with_nested_markets": "true"  # Include market details
-}
-```
-
-**Data fields extracted from Kalshi:**
-
-| Field | Description |
-|-------|-------------|
-| `market_id` | Unique market ticker |
-| `question` | Market title/question |
-| `description` | Resolution rules (primary + secondary) |
-| `category` | Topic category from parent event |
-| `winning_outcome` | Result: "yes" or "no" |
-| `close_time` | When the market resolved |
-| `volume` | Total trading volume |
-| `last_price` | Final market price (0-100 cents) |
-| `series_ticker` | Group identifier for related markets |
-
-#### Polymarket Data Extraction
-
-The `PolymarketDataExtractor` fetches from Polymarket's Gamma API:
-
-```python
-url = "https://gamma-api.polymarket.com/markets"
-params = {
-    "closed": "true",  # Only resolved markets
-    "limit": 100,
-    "offset": offset
-}
-```
-
-**Key difference:** Polymarket supports multi-outcome markets (not just yes/no), so outcome parsing is more complex:
-
-```python
-def parse_winning_outcome(outcomes_str, outcome_prices_str):
-    """Determine winner by finding outcome with highest final price"""
-    outcomes = json.loads(outcomes_str)   # ["Yes", "No"] or ["Biden", "Trump", "Other"]
-    prices = json.loads(outcome_prices_str)  # [0.65, 0.35] or [0.4, 0.55, 0.05]
-    
-    max_idx = prices.index(max(prices))
-    return outcomes[max_idx]  # Winner is highest-priced outcome
-```
-
-#### Unified Schema
-
-The orchestrator normalizes platform-specific data into a unified schema:
-
-```python
-unified_schema = Features({
-    "platform": Value("string"),        # Source platform
-    "market_id": Value("string"),       # Unique identifier
-    "question": Value("string"),        # The prediction question
-    "description": Value("string"),     # Resolution criteria
-    "category": Value("string"),        # Topic category
-    "winning_outcome": Value("string"), # Actual result
-    "outcomes": Value("string"),        # JSON: all possible outcomes
-    "outcome_prices": Value("string"),  # JSON: final prices
-    "close_time": Value("string"),      # Resolution timestamp
-    "volume": Value("float64"),         # Trading volume
-    "liquidity": Value("float64"),      # Market liquidity
-    "open_interest": Value("float64"),  # Open positions
-    "original": Value("string"),        # Raw API response (for debugging)
-    # ... additional fields
-})
-```
-
-#### Running Dataset Creation
-
-```bash
-# Create fresh dataset from APIs
-python dataset_creator.py
-
-# This will:
-# 1. Fetch all settled markets from Kalshi
-# 2. Convert to unified schema
-# 3. Save locally as parquet
-# 4. Push to HuggingFace Hub
-```
-
-#### Data Cleaning
-
-After fetching, the dataset is cleaned to ensure quality:
-
-```python
-def clean_dataset(data_item):
-    """Filter to only Kalshi binary markets with clear outcomes"""
-    accept = True
-    accept = accept and data_item['platform'] == 'kalshi'
-    accept = accept and data_item['winning_outcome'].lower() in ['yes', 'no']
-    return accept
-
-# Result: 2084Collective/prediction-markets-historical-v5-cleaned
-```
-
-#### Adding New Platforms
-
-To add a new prediction market platform:
-
-```python
-class NewPlatformExtractor(PredictionMarketDataExtractor):
-    def get_market_name(self) -> str:
-        return "new_platform"
-    
-    def fetch_closed_markets(self, max_markets: int) -> list[dict]:
-        # Implement API fetching
-        pass
-    
-    def get_dataset_features(self) -> Features:
-        # Define platform-specific schema
-        pass
-    
-    def to_unified_format(self, market: dict) -> dict:
-        # Map to unified schema
-        pass
-
-# Add to orchestrator
-orchestrator = PredictionMarketDataOrchestrator([
-    KalshiDataExtractor(),
-    PolymarketDataExtractor(),
-    NewPlatformExtractor(),  # Your new extractor
-])
-```
-
-#### HuggingFace Dataset
-
-The processed dataset is available on HuggingFace:
-
-```python
-from datasets import load_dataset
-
-# Load the cleaned Kalshi dataset
-dataset = load_dataset("2084Collective/prediction-markets-historical-v5-cleaned")
-
-# Inspect
-print(f"Total markets: {len(dataset['train'])}")
-print(dataset['train'][0])
-```
-
-**Dataset URL:** [huggingface.co/datasets/2084Collective/prediction-markets-historical-v5-cleaned](https://huggingface.co/datasets/2084Collective/prediction-markets-historical-v5-cleaned)
-
----
-
-### 2. Data Fields
-
-The dataset contains:
-
-- **Question**: The prediction market question (e.g., "Will inflation exceed 3% in Q4 2025?")
-- **Description**: Context and resolution criteria
-- **Close Time**: When the market resolved
-- **Winning Outcome**: The actual result (yes/no)
-- **Category**: Topic area (politics, economics, sports, etc.)
+**Legacy mode**: Use `--raw` flag to load from the raw dataset with on-the-fly deduplication.
 
 ### 2. Temporal Filtering
 
@@ -431,6 +246,78 @@ The benchmark computes:
 2. **Calibration metrics** from the confidence scores vs. actual outcomes
 3. **Per-category breakdowns** for fine-grained analysis
 4. **Reliability diagrams** for visualization
+
+---
+
+## Dataset Architecture
+
+### Creating the KalshiBench Dataset
+
+The dataset is created using `create_kalshibench.py`, which:
+
+1. Loads raw prediction market data from `2084Collective/prediction-markets-historical-v5-cleaned`
+2. Filters to questions with valid ground truth (yes/no)
+3. Limits to **2 questions per `series_ticker`** to reduce redundancy while preserving question diversity within a series
+4. Cleans and standardizes fields
+5. Uploads to HuggingFace as `2084Collective/kalshibench-v2`
+
+```bash
+# Create and save locally
+python create_kalshibench.py --output kalshibench_v1
+
+# Create and upload to HuggingFace
+python create_kalshibench.py --upload 2084Collective/kalshibench-v2
+```
+
+### Raw Data Extraction
+
+The raw dataset is created using `dataset_creator.py`, which uses an abstract factory pattern:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                PredictionMarketDataOrchestrator                 │
+│  - Coordinates multiple extractors                              │
+│  - Creates unified schema across platforms                      │
+│  - Pushes to HuggingFace Hub                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ KalshiExtractor │  │PolymarketExtr. │  │ Future Platform │
+│                 │  │                 │  │                 │
+│ - Kalshi API    │  │ - Gamma API     │  │ - Your API      │
+│ - Binary yes/no │  │ - Multi-outcome │  │ - Custom schema │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### KalshiBench Dataset Schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier (series_ticker) |
+| `question` | string | The prediction market question |
+| `description` | string | Detailed description/resolution criteria |
+| `category` | string | Question category (e.g., "Politics", "Economics") |
+| `close_time` | string | When the market closed (ISO format) |
+| `ground_truth` | string | Resolved outcome ("yes" or "no") |
+| `series_ticker` | string | Original Kalshi series ticker |
+| `source` | string | Data source ("kalshi") |
+
+### Loading the Dataset
+
+```python
+from datasets import load_dataset
+
+# Load from HuggingFace (recommended)
+dataset = load_dataset("2084Collective/kalshibench-v2", split="train")
+
+# Filter by knowledge cutoff
+cutoff = "2025-04-01"
+future_questions = dataset.filter(lambda x: x["close_time"] >= cutoff)
+
+print(f"Questions after cutoff: {len(future_questions)}")
+```
 
 ---
 
@@ -542,8 +429,10 @@ kalshibench_results/
 ├── summary_TIMESTAMP.json         # Aggregated results
 ├── report_TIMESTAMP.md            # Human-readable report
 ├── metadata_TIMESTAMP.json        # Benchmark configuration
+├── dataset_analysis_TIMESTAMP.json # Dataset statistics
 ├── paper_methods_prompt_*.txt     # LLM prompt for Methods section
 ├── paper_results_prompt_*.txt     # LLM prompt for Results section
+├── paper_dataset_prompt_*.txt     # LLM prompt for Dataset section
 └── MODEL_NAME_TIMESTAMP.json      # Per-model detailed results
 ```
 
@@ -650,6 +539,9 @@ cat results/paper_methods_prompt_*.txt | pbcopy
 
 cat results/paper_results_prompt_*.txt | pbcopy
 # Paste into Claude/GPT to get Results section
+
+cat results/paper_dataset_prompt_*.txt | pbcopy
+# Paste into Claude/GPT to get Dataset section
 ```
 
 ---
@@ -662,6 +554,16 @@ Override automatic cutoff computation:
 
 ```bash
 python kalshibench.py --models gpt-4o claude-3-5-sonnet --cutoff 2024-06-01
+```
+
+### Use Raw Dataset (Legacy Mode)
+
+```bash
+# Load from raw dataset with on-the-fly deduplication
+python kalshibench.py --models gpt-4o --raw
+
+# Override dataset source
+python kalshibench.py --models gpt-4o --dataset my-org/my-dataset
 ```
 
 ### Adjust Concurrency
@@ -712,9 +614,9 @@ If you use KalshiBench in your research, please cite:
 ```bibtex
 @misc{kalshibench2025,
   title={KalshiBench: Evaluating LLM Forecasting Calibration via Prediction Markets},
-  author={...},
+  author={2084 Collective},
   year={2025},
-  howpublished={\url{https://github.com/your-org/kalshibench}}
+  howpublished={\url{https://github.com/2084collective/kalshibench}}
 }
 ```
 
@@ -733,4 +635,3 @@ Contributions welcome! Please open an issue or PR for:
 - New metrics
 - Bug fixes
 - Documentation improvements
-

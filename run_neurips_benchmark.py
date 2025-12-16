@@ -37,7 +37,7 @@ MODEL_TIERS = {
     "tier1_flagships": [
         "gpt-5.2",
         "claude-opus-4.5",
-        "gemini-2.0-flash",
+        # "gemini-2.0-flash",
         "llama-3.1-405b",
     ],
     

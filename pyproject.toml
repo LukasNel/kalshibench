@@ -34,6 +34,7 @@ dependencies = [
     "litellm>=1.0.0",
     "tqdm>=4.65.0",
     "requests>=2.28.0",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]
@@ -47,10 +48,11 @@ training = [
     "unsloth @ git+https://github.com/unslothai/unsloth.git",
 ]
 
-# For dataset creation (dataset_creator.py)
+# For dataset creation (dataset_creator.py, create_kalshibench.py)
 dataset = [
     "requests>=2.28.0",
     "tqdm>=4.65.0",
+    "huggingface-hub>=0.20.0",  # For uploading datasets
 ]
 
 # Development dependencies
@@ -69,6 +71,7 @@ all = [
 
 [project.scripts]
 kalshibench = "kalshibench:main"
+create-kalshibench = "create_kalshibench:main"
 
 [project.urls]
 Homepage = "https://github.com/2084collective/kalshibench"

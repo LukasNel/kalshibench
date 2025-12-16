@@ -22,6 +22,7 @@ from typing import Optional, Literal
 from collections import defaultdict
 from enum import Enum
 import numpy as np
+from pydantic import BaseModel as PydanticBaseModel, Field
 from datasets import load_dataset
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as atqdm
@@ -354,13 +355,17 @@ MODELS = {
 @dataclass
 class BenchmarkConfig:
     """Configuration for the benchmark run."""
-    dataset_name: str = "2084Collective/prediction-markets-historical-v5-cleaned"
+    # Use pre-cleaned KalshiBench dataset (already deduplicated)
+    dataset_name: str = "2084Collective/kalshibench-v2"
     knowledge_cutoff: str | None = None  # Auto-computed from models if None
     num_samples: int = 200
     output_dir: str = "kalshibench_results"
     seed: int = 42
     max_concurrent: int = 10  # Max concurrent API calls
     confidence_bins: int = 10  # For calibration analysis
+    # Legacy: set to True to use raw dataset with deduplication
+    use_raw_dataset: bool = False
+    raw_dataset_name: str = "2084Collective/prediction-markets-historical-v5-cleaned"
 
 
 def get_max_knowledge_cutoff(model_keys: list[str]) -> str:
@@ -406,6 +411,9 @@ class ModelPrediction:
     raw_output: str
     latency_ms: float
     error: Optional[str] = None
+    # Token usage
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 @dataclass 
@@ -454,7 +462,12 @@ class EvaluationResult:
     # Meta
     parse_rate: float
     avg_latency_ms: float
-    total_cost_usd: Optional[float] = None
+    
+    # Token usage and cost
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
     
     # Raw predictions for further analysis
     predictions: list = field(default_factory=list)
@@ -594,65 +607,127 @@ Based on the information provided, predict whether this will resolve to "yes" or
             {"role": "user", "content": self._format_prompt(question)},
         ]
         
-        try:
-            response = await acompletion(
-                model=self.config.litellm_model,
-                messages=messages,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-            )
-            
-            raw_output = response.choices[0].message.content
-            latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-            
-            answer, confidence, reasoning = self._parse_response(raw_output)
-            
-            return ModelPrediction(
-                question_id=question.id,
-                predicted_answer=answer,
-                predicted_probability=confidence,
-                reasoning=reasoning,
-                raw_output=raw_output,
-                latency_ms=latency_ms,
-            )
-            
-        except Exception as e:
-            latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-            return ModelPrediction(
-                question_id=question.id,
-                predicted_answer=None,
-                predicted_probability=0.5,
-                reasoning="",
-                raw_output="",
-                latency_ms=latency_ms,
-                error=str(e),
-            )
-
+        response = await acompletion(
+            model=self.config.litellm_model,
+            messages=messages,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+        )
+        
+        raw_output = response.choices[0].message.content
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        
+        # Extract token usage
+        input_tokens = 0
+        output_tokens = 0
+        if hasattr(response, 'usage') and response.usage:
+            input_tokens = getattr(response.usage, 'prompt_tokens', 0) or 0
+            output_tokens = getattr(response.usage, 'completion_tokens', 0) or 0
+        
+        answer, confidence, reasoning = self._parse_response(raw_output)
+        
+        # Cast answer to the expected type
+        valid_answer: Optional[Literal["yes", "no"]] = None
+        if answer in ("yes", "no"):
+            valid_answer = answer  # type: ignore
+        
+        return ModelPrediction(
+            question_id=question.id,
+            predicted_answer=valid_answer,
+            predicted_probability=confidence,
+            reasoning=reasoning,
+            raw_output=raw_output,
+            latency_ms=latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+       
 
 class KalshiDataLoader(BaseDataLoader):
-    """Load prediction market data from HuggingFace dataset."""
+    """Load prediction market data from HuggingFace dataset.
+    
+    By default, loads from the pre-cleaned KalshiBench dataset which is already
+    deduplicated. Set config.use_raw_dataset=True to use the raw dataset with
+    on-the-fly deduplication.
+    """
     
     def __init__(self, config: BenchmarkConfig):
         self.config = config
     
     def load(self) -> list[MarketQuestion]:
         """Load and filter market questions."""
-        logger.info(f"📥 Loading dataset: {self.config.dataset_name}")
+        if self.config.use_raw_dataset:
+            return self._load_raw_with_dedup()
+        else:
+            return self._load_cleaned()
+    
+    def _load_cleaned(self) -> list[MarketQuestion]:
+        """Load from pre-cleaned KalshiBench dataset (recommended)."""
+        logger.info(f"📥 Loading KalshiBench: {self.config.dataset_name}")
         dataset = load_dataset(self.config.dataset_name, split="train")
+        logger.info(f"   Dataset size: {len(dataset):,} (pre-cleaned, deduplicated)")
+        
+        # Filter by date (post-knowledge-cutoff) - this is the only runtime filter needed
+        if self.config.knowledge_cutoff:
+            logger.info(f"🔍 Filtering by date >= {self.config.knowledge_cutoff}")
+            def filter_by_date(example):
+                close_time = example.get("close_time", "")
+                return close_time and close_time >= self.config.knowledge_cutoff
+            
+            dataset = dataset.filter(filter_by_date)
+            logger.info(f"   After date filter: {len(dataset):,}")
+        
+        # Convert to MarketQuestion objects
+        logger.info("📝 Converting to MarketQuestion objects")
+        questions = []
+        for item in tqdm(dataset, desc="Loading questions", unit="q"):
+            # Pre-cleaned dataset uses 'ground_truth' field
+            ground_truth = item.get("ground_truth", "")
+            if ground_truth not in ["yes", "no"]:
+                # Fallback for raw dataset format
+                ground_truth = (item.get("winning_outcome") or "").lower()
+                if ground_truth not in ["yes", "no"]:
+                    continue
+            
+            questions.append(MarketQuestion(
+                id=item.get("id") or f"kalshi_{len(questions)}",
+                question=item.get("question", ""),
+                description=(item.get("description") or "")[:2000],
+                category=item.get("category", "unknown"),
+                close_time=item.get("close_time", ""),
+                ground_truth=ground_truth,
+                market_probability=item.get("market_probability") or item.get("last_price"),
+            ))
+        
+        logger.info(f"   Valid questions: {len(questions):,}")
+        
+        # Sample if needed
+        questions = self._sample_questions(questions)
+        
+        # Show summary
+        self._log_summary(questions)
+        return questions
+    
+    def _load_raw_with_dedup(self) -> list[MarketQuestion]:
+        """Load from raw dataset with on-the-fly deduplication (legacy)."""
+        logger.info(f"📥 Loading raw dataset: {self.config.raw_dataset_name}")
+        logger.info("   ⚠️  Using legacy mode with on-the-fly deduplication")
+        dataset = load_dataset(self.config.raw_dataset_name, split="train")
         logger.info(f"   Raw dataset size: {len(dataset):,}")
         
         # Filter by date (post-knowledge-cutoff)
-        logger.info(f"🔍 Filtering by date >= {self.config.knowledge_cutoff}")
-        def filter_by_date(example):
-            close_time = example.get("close_time", "")
-            return close_time and close_time >= self.config.knowledge_cutoff
-        
-        dataset = dataset.filter(filter_by_date, desc="Filtering by date")
-        logger.info(f"   After date filter: {len(dataset):,}")
+        if self.config.knowledge_cutoff:
+            logger.info(f"🔍 Filtering by date >= {self.config.knowledge_cutoff}")
+            def filter_by_date(example):
+                close_time = example.get("close_time", "")
+                return close_time and close_time >= self.config.knowledge_cutoff
+            
+            dataset = dataset.filter(filter_by_date)
+            logger.info(f"   After date filter: {len(dataset):,}")
         
         # Deduplicate by series_ticker
         logger.info("🔄 Deduplicating by series_ticker")
-        seen_tickers = set()
+        seen_tickers: set[str] = set()
         def deduplicate(example):
             ticker = example.get("series_ticker", "")
             if ticker and ticker not in seen_tickers:
@@ -660,40 +735,51 @@ class KalshiDataLoader(BaseDataLoader):
                 return True
             return False
         
-        dataset = dataset.filter(deduplicate, desc="Deduplicating")
+        dataset = dataset.filter(deduplicate)
         logger.info(f"   After deduplication: {len(dataset):,}")
         
         # Convert to MarketQuestion objects
         logger.info("📝 Converting to MarketQuestion objects")
         questions = []
         for item in tqdm(dataset, desc="Processing questions", unit="q"):
-            winning_outcome = item.get("winning_outcome", "").lower()
+            winning_outcome = (item.get("winning_outcome") or "").lower()
             if winning_outcome not in ["yes", "no"]:
                 continue
             
             questions.append(MarketQuestion(
                 id=f"kalshi_{len(questions)}_{item.get('series_ticker', 'unknown')}",
                 question=item.get("question", ""),
-                description=item.get("description", "")[:2000],  # Truncate long descriptions
+                description=(item.get("description") or "")[:2000],
                 category=item.get("category", "unknown"),
                 close_time=item.get("close_time", ""),
                 ground_truth=winning_outcome,
-                market_probability=item.get("last_price"),  # If available
+                market_probability=item.get("last_price"),
             ))
         
         logger.info(f"   Valid questions: {len(questions):,}")
         
-        # Sample
-        np.random.seed(self.config.seed)
+        # Sample if needed
+        questions = self._sample_questions(questions)
+        
+        # Show summary
+        self._log_summary(questions)
+        return questions
+    
+    def _sample_questions(self, questions: list[MarketQuestion]) -> list[MarketQuestion]:
+        """Sample questions if we have more than num_samples."""
         if len(questions) > self.config.num_samples:
+            np.random.seed(self.config.seed)
             logger.info(f"🎲 Sampling {self.config.num_samples:,} questions from {len(questions):,}")
             indices = np.random.choice(len(questions), self.config.num_samples, replace=False)
             questions = [questions[i] for i in indices]
-        
-        # Show category distribution
-        categories = defaultdict(int)
+        return questions
+    
+    def _log_summary(self, questions: list[MarketQuestion]) -> None:
+        """Log category distribution summary."""
+        categories: dict[str, int] = defaultdict(int)
         for q in questions:
             categories[q.category] += 1
+        
         logger.info(f"   Category distribution:")
         for cat, count in sorted(categories.items(), key=lambda x: -x[1])[:5]:
             logger.info(f"      {cat}: {count}")
@@ -701,7 +787,469 @@ class KalshiDataLoader(BaseDataLoader):
             logger.info(f"      ... and {len(categories) - 5} more categories")
         
         logger.info(f"✅ Loaded {len(questions):,} questions")
-        return questions
+
+
+# ==============================================================================
+# Dataset Analysis Models (Pydantic)
+# ==============================================================================
+
+class DateRangeStats(PydanticBaseModel):
+    """Temporal range of the dataset."""
+    earliest: str | None = None
+    latest: str | None = None
+    span_days: int = 0
+
+
+class TimeHorizonStats(PydanticBaseModel):
+    """Statistics about prediction time horizons."""
+    mean_days_ahead: float = 0.0
+    median_days_ahead: float = 0.0
+    std_days_ahead: float = 0.0
+    min_days_ahead: int = 0
+    max_days_ahead: int = 0
+
+
+class DistributionStats(PydanticBaseModel):
+    """Basic statistical distribution metrics."""
+    mean: float = 0.0
+    median: float = 0.0
+    std: float = 0.0
+    min: int = 0
+    max: int = 0
+
+
+class GroundTruthDistribution(PydanticBaseModel):
+    """Overall ground truth label distribution."""
+    yes: int = 0
+    no: int = 0
+    yes_rate: float = 0.0
+
+
+class CategoryGroundTruth(PydanticBaseModel):
+    """Ground truth distribution for a single category."""
+    yes: int = 0
+    no: int = 0
+    total: int = 0
+    yes_rate: float = 0.0
+
+
+class MonthGroundTruth(PydanticBaseModel):
+    """Ground truth distribution for a single month."""
+    yes_rate: float = 0.0
+    total: int = 0
+
+
+class ReliabilityBin(PydanticBaseModel):
+    """Single bin in a reliability diagram."""
+    bin: str
+    avg_confidence: float
+    avg_accuracy: float
+    count: int
+
+
+class MarketCalibration(PydanticBaseModel):
+    """Calibration metrics for market prices."""
+    brier_score: float
+    brier_skill_score: float
+    ece: float
+    log_loss: float
+    accuracy: float
+    base_rate: float
+
+
+class UncertaintyDistribution(PydanticBaseModel):
+    """Distribution of market uncertainty levels."""
+    high_confidence: int = Field(0, description="Count of predictions with prob <0.2 or >0.8")
+    medium_confidence: int = Field(0, description="Count of predictions with prob 0.2-0.4 or 0.6-0.8")
+    low_confidence: int = Field(0, description="Count of predictions with prob 0.4-0.6")
+
+
+class TemporalAnalysis(PydanticBaseModel):
+    """Complete temporal analysis results."""
+    date_range: DateRangeStats
+    by_month: dict[str, int] = Field(default_factory=dict)
+    time_horizon: TimeHorizonStats | None = None
+
+
+class GroundTruthAnalysis(PydanticBaseModel):
+    """Complete ground truth analysis results."""
+    distribution: GroundTruthDistribution
+    by_category: dict[str, CategoryGroundTruth] = Field(default_factory=dict)
+    by_month: dict[str, MonthGroundTruth] = Field(default_factory=dict)
+
+
+class CategoryAnalysis(PydanticBaseModel):
+    """Complete category analysis results."""
+    distribution: dict[str, int] = Field(default_factory=dict)
+    entropy: float = 0.0
+    normalized_entropy: float = 0.0
+    num_categories: int = 0
+    largest_category: str | None = None
+    smallest_category: str | None = None
+
+
+class ComplexityAnalysis(PydanticBaseModel):
+    """Question complexity analysis results."""
+    question_length: DistributionStats
+    description_length: DistributionStats
+    vocabulary_size: int = 0
+    avg_words: float = 0.0
+
+
+class MarketBaselineAnalysis(PydanticBaseModel):
+    """Complete market baseline analysis."""
+    coverage: float = 0.0
+    calibration: MarketCalibration | None = None
+    reliability_diagram: list[ReliabilityBin] = Field(default_factory=list)
+    uncertainty_distribution: UncertaintyDistribution | None = None
+    high_confidence_accuracy: float | None = None
+    uncertain_accuracy: float | None = None
+
+
+class DatasetAnalysis(PydanticBaseModel):
+    """Comprehensive dataset analysis for paper generation."""
+    # Basic stats
+    total_questions: int
+    knowledge_cutoff: str
+    
+    # Temporal distribution
+    date_range: DateRangeStats
+    temporal_distribution: dict[str, int] = Field(default_factory=dict)
+    time_horizon_stats: TimeHorizonStats | None = None
+    
+    # Ground truth analysis
+    ground_truth_distribution: GroundTruthDistribution
+    ground_truth_by_category: dict[str, CategoryGroundTruth] = Field(default_factory=dict)
+    ground_truth_by_month: dict[str, MonthGroundTruth] = Field(default_factory=dict)
+    
+    # Category analysis
+    category_distribution: dict[str, int] = Field(default_factory=dict)
+    category_entropy: float = 0.0
+    num_categories: int = 0
+    largest_category: str | None = None
+    smallest_category: str | None = None
+    
+    # Question complexity
+    question_length_stats: DistributionStats
+    description_length_stats: DistributionStats
+    total_vocabulary_size: int = 0
+    avg_words_per_question: float = 0.0
+    
+    # Market baseline
+    market_coverage: float = 0.0
+    market_calibration: MarketCalibration | None = None
+    market_reliability_diagram: list[ReliabilityBin] = Field(default_factory=list)
+    market_uncertainty_distribution: UncertaintyDistribution | None = None
+    high_confidence_market_accuracy: float | None = None
+    uncertain_market_accuracy: float | None = None
+
+
+class DatasetAnalyzer:
+    """Analyze dataset characteristics for paper generation."""
+    
+    def __init__(self, questions: list[MarketQuestion], config: BenchmarkConfig):
+        self.questions = questions
+        self.config = config
+    
+    def analyze(self) -> DatasetAnalysis:
+        """Run full dataset analysis."""
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("📊 DATASET ANALYSIS")
+        logger.info("=" * 60)
+        
+        # Basic stats
+        total = len(self.questions)
+        
+        # Temporal analysis
+        temporal = self._analyze_temporal()
+        logger.info(f"   Date range: {temporal.date_range.earliest} to {temporal.date_range.latest}")
+        logger.info(f"   Span: {temporal.date_range.span_days} days")
+        
+        # Ground truth analysis
+        gt_analysis = self._analyze_ground_truth()
+        logger.info(f"   Ground truth: {gt_analysis.distribution.yes_rate:.1%} Yes, {1-gt_analysis.distribution.yes_rate:.1%} No")
+        
+        # Category analysis
+        cat_analysis = self._analyze_categories()
+        logger.info(f"   Categories: {cat_analysis.num_categories} unique")
+        if cat_analysis.largest_category:
+            logger.info(f"   Largest: {cat_analysis.largest_category} ({cat_analysis.distribution.get(cat_analysis.largest_category, 0)})")
+        
+        # Complexity analysis
+        complexity = self._analyze_complexity()
+        logger.info(f"   Avg question length: {complexity.question_length.mean:.0f} chars")
+        logger.info(f"   Vocabulary size: {complexity.vocabulary_size:,} unique words")
+        
+        # Market baseline
+        market = self._analyze_market_baseline()
+        if market.coverage > 0:
+            logger.info(f"   Market coverage: {market.coverage:.1%}")
+            if market.calibration:
+                logger.info(f"   Market Brier: {market.calibration.brier_score:.4f}")
+                logger.info(f"   Market accuracy: {market.calibration.accuracy:.1%}")
+        
+        return DatasetAnalysis(
+            total_questions=total,
+            knowledge_cutoff=self.config.knowledge_cutoff or "unknown",
+            date_range=temporal.date_range,
+            temporal_distribution=temporal.by_month,
+            time_horizon_stats=temporal.time_horizon,
+            ground_truth_distribution=gt_analysis.distribution,
+            ground_truth_by_category=gt_analysis.by_category,
+            ground_truth_by_month=gt_analysis.by_month,
+            category_distribution=cat_analysis.distribution,
+            category_entropy=cat_analysis.entropy,
+            num_categories=cat_analysis.num_categories,
+            largest_category=cat_analysis.largest_category,
+            smallest_category=cat_analysis.smallest_category,
+            question_length_stats=complexity.question_length,
+            description_length_stats=complexity.description_length,
+            total_vocabulary_size=complexity.vocabulary_size,
+            avg_words_per_question=complexity.avg_words,
+            market_coverage=market.coverage,
+            market_calibration=market.calibration,
+            market_reliability_diagram=market.reliability_diagram,
+            market_uncertainty_distribution=market.uncertainty_distribution,
+            high_confidence_market_accuracy=market.high_confidence_accuracy,
+            uncertain_market_accuracy=market.uncertain_accuracy,
+        )
+    
+    def _analyze_temporal(self) -> TemporalAnalysis:
+        """Analyze temporal distribution of questions."""
+        close_times = [q.close_time for q in self.questions if q.close_time]
+        
+        if not close_times:
+            return TemporalAnalysis(
+                date_range=DateRangeStats(),
+                by_month={},
+                time_horizon=None,
+            )
+        
+        earliest = min(close_times)
+        latest = max(close_times)
+        
+        # Calculate span
+        earliest_dt = datetime.fromisoformat(earliest.replace('Z', '+00:00').split('T')[0])
+        latest_dt = datetime.fromisoformat(latest.replace('Z', '+00:00').split('T')[0])
+        span_days = (latest_dt - earliest_dt).days
+        
+        # Distribution by month
+        by_month: dict[str, int] = defaultdict(int)
+        for ct in close_times:
+            month = ct[:7]  # YYYY-MM
+            by_month[month] += 1
+        
+        # Time horizon analysis (days from knowledge cutoff to close)
+        horizons: list[int] = []
+        if self.config.knowledge_cutoff:
+            cutoff_dt = datetime.fromisoformat(self.config.knowledge_cutoff)
+            for ct in close_times:
+                close_dt = datetime.fromisoformat(ct.replace('Z', '+00:00').split('T')[0])
+                days_ahead = (close_dt - cutoff_dt).days
+                if days_ahead > 0:
+                    horizons.append(days_ahead)
+        
+        horizon_stats = None
+        if horizons:
+            horizon_stats = TimeHorizonStats(
+                mean_days_ahead=float(np.mean(horizons)),
+                median_days_ahead=float(np.median(horizons)),
+                std_days_ahead=float(np.std(horizons)),
+                min_days_ahead=int(min(horizons)),
+                max_days_ahead=int(max(horizons)),
+            )
+        
+        return TemporalAnalysis(
+            date_range=DateRangeStats(earliest=earliest, latest=latest, span_days=span_days),
+            by_month=dict(sorted(by_month.items())),
+            time_horizon=horizon_stats,
+        )
+    
+    def _analyze_ground_truth(self) -> GroundTruthAnalysis:
+        """Analyze ground truth distribution and biases."""
+        yes_count = sum(1 for q in self.questions if q.ground_truth == "yes")
+        no_count = len(self.questions) - yes_count
+        yes_rate = yes_count / len(self.questions) if self.questions else 0.0
+        
+        # By category
+        by_category_raw: dict[str, dict[str, int]] = defaultdict(lambda: {'yes': 0, 'no': 0})
+        for q in self.questions:
+            if q.ground_truth == "yes":
+                by_category_raw[q.category]['yes'] += 1
+            else:
+                by_category_raw[q.category]['no'] += 1
+        
+        by_category: dict[str, CategoryGroundTruth] = {}
+        for cat, counts in by_category_raw.items():
+            total = counts['yes'] + counts['no']
+            by_category[cat] = CategoryGroundTruth(
+                yes=counts['yes'],
+                no=counts['no'],
+                total=total,
+                yes_rate=counts['yes'] / total if total > 0 else 0.0,
+            )
+        
+        # By month
+        by_month_raw: dict[str, dict[str, int]] = defaultdict(lambda: {'yes': 0, 'total': 0})
+        for q in self.questions:
+            month = q.close_time[:7] if q.close_time else 'unknown'
+            by_month_raw[month]['total'] += 1
+            if q.ground_truth == "yes":
+                by_month_raw[month]['yes'] += 1
+        
+        by_month: dict[str, MonthGroundTruth] = {}
+        for month, counts in sorted(by_month_raw.items()):
+            by_month[month] = MonthGroundTruth(
+                yes_rate=counts['yes'] / counts['total'] if counts['total'] > 0 else 0.0,
+                total=counts['total'],
+            )
+        
+        return GroundTruthAnalysis(
+            distribution=GroundTruthDistribution(yes=yes_count, no=no_count, yes_rate=yes_rate),
+            by_category=by_category,
+            by_month=by_month,
+        )
+    
+    def _analyze_categories(self) -> CategoryAnalysis:
+        """Analyze category distribution and diversity."""
+        category_counts: dict[str, int] = defaultdict(int)
+        for q in self.questions:
+            category_counts[q.category] += 1
+        
+        # Shannon entropy
+        total = len(self.questions)
+        probs = [count / total for count in category_counts.values()]
+        entropy = float(-sum(p * np.log2(p) for p in probs if p > 0))
+        max_entropy = float(np.log2(len(category_counts))) if category_counts else 0.0
+        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0.0
+        
+        sorted_cats = sorted(category_counts.items(), key=lambda x: -x[1])
+        
+        return CategoryAnalysis(
+            distribution=dict(sorted_cats),
+            entropy=entropy,
+            normalized_entropy=normalized_entropy,
+            num_categories=len(category_counts),
+            largest_category=sorted_cats[0][0] if sorted_cats else None,
+            smallest_category=sorted_cats[-1][0] if sorted_cats else None,
+        )
+    
+    def _analyze_complexity(self) -> ComplexityAnalysis:
+        """Analyze question complexity metrics."""
+        question_lengths = [len(q.question) for q in self.questions]
+        description_lengths = [len(q.description) for q in self.questions]
+        
+        # Vocabulary analysis
+        all_words: set[str] = set()
+        word_counts: list[int] = []
+        for q in self.questions:
+            words = re.findall(r'\b\w+\b', (q.question + " " + q.description).lower())
+            all_words.update(words)
+            word_counts.append(len(words))
+        
+        def make_stats(arr: list[int]) -> DistributionStats:
+            if not arr:
+                return DistributionStats()
+            return DistributionStats(
+                mean=float(np.mean(arr)),
+                median=float(np.median(arr)),
+                std=float(np.std(arr)),
+                min=int(min(arr)),
+                max=int(max(arr)),
+            )
+        
+        return ComplexityAnalysis(
+            question_length=make_stats(question_lengths),
+            description_length=make_stats(description_lengths),
+            vocabulary_size=len(all_words),
+            avg_words=float(np.mean(word_counts)) if word_counts else 0.0,
+        )
+    
+    def _analyze_market_baseline(self) -> MarketBaselineAnalysis:
+        """Analyze market prices as a baseline predictor."""
+        # Get questions with market prices
+        with_prices = [(q, q.market_probability) for q in self.questions 
+                       if q.market_probability is not None]
+        
+        coverage = len(with_prices) / len(self.questions) if self.questions else 0.0
+        
+        if not with_prices:
+            return MarketBaselineAnalysis(coverage=coverage)
+        
+        # Extract arrays
+        probs = np.array([p for _, p in with_prices])
+        actuals = np.array([1.0 if q.ground_truth == "yes" else 0.0 for q, _ in with_prices])
+        predictions = (probs >= 0.5).astype(int)
+        correct = predictions == actuals
+        
+        # Brier score
+        brier = float(np.mean((probs - actuals) ** 2))
+        
+        # Base rate for skill score
+        base_rate = float(np.mean(actuals))
+        brier_clim = float(np.mean((base_rate - actuals) ** 2))
+        brier_skill = 1 - (brier / brier_clim) if brier_clim > 0 else 0.0
+        
+        # Accuracy
+        accuracy = float(np.mean(correct))
+        
+        # ECE
+        n_bins = 10
+        bins = np.linspace(0, 1, n_bins + 1)
+        ece = 0.0
+        reliability_diagram: list[ReliabilityBin] = []
+        
+        for i in range(n_bins):
+            mask = (probs >= bins[i]) & (probs < bins[i + 1])
+            if np.sum(mask) > 0:
+                bin_conf = float(np.mean(probs[mask]))
+                bin_acc = float(np.mean(actuals[mask]))
+                bin_count = int(np.sum(mask))
+                ece += bin_count * abs(bin_conf - bin_acc)
+                reliability_diagram.append(ReliabilityBin(
+                    bin=f"{bins[i]:.1f}-{bins[i+1]:.1f}",
+                    avg_confidence=bin_conf,
+                    avg_accuracy=bin_acc,
+                    count=bin_count,
+                ))
+        ece = ece / len(probs)
+        
+        # Log loss
+        eps = 1e-15
+        probs_clip = np.clip(probs, eps, 1 - eps)
+        log_loss = float(-np.mean(actuals * np.log(probs_clip) + (1 - actuals) * np.log(1 - probs_clip)))
+        
+        # Uncertainty distribution
+        uncertainty_dist = UncertaintyDistribution(
+            high_confidence=int(np.sum((probs < 0.2) | (probs > 0.8))),
+            medium_confidence=int(np.sum(((probs >= 0.2) & (probs < 0.4)) | ((probs > 0.6) & (probs <= 0.8)))),
+            low_confidence=int(np.sum((probs >= 0.4) & (probs <= 0.6))),
+        )
+        
+        # High confidence accuracy
+        high_conf_mask = (probs > 0.8) | (probs < 0.2)
+        high_conf_acc = float(np.mean(correct[high_conf_mask])) if np.sum(high_conf_mask) > 0 else None
+        
+        # Uncertain accuracy  
+        uncertain_mask = (probs >= 0.4) & (probs <= 0.6)
+        uncertain_acc = float(np.mean(correct[uncertain_mask])) if np.sum(uncertain_mask) > 0 else None
+        
+        return MarketBaselineAnalysis(
+            coverage=coverage,
+            calibration=MarketCalibration(
+                brier_score=brier,
+                brier_skill_score=brier_skill,
+                ece=ece,
+                log_loss=log_loss,
+                accuracy=accuracy,
+                base_rate=base_rate,
+            ),
+            reliability_diagram=reliability_diagram,
+            uncertainty_distribution=uncertainty_dist,
+            high_confidence_accuracy=high_conf_acc,
+            uncertain_accuracy=uncertain_acc,
+        )
 
 
 # ==============================================================================
@@ -983,12 +1531,19 @@ class KalshiBenchRunner:
         self.metrics_calc = MetricsCalculator(config)
         self.questions: list[MarketQuestion] = []
         self.results: dict[str, EvaluationResult] = {}
+        self.dataset_analysis: Optional[DatasetAnalysis] = None
         self.start_time = None
     
     def load_data(self):
         """Load benchmark data."""
         self.questions = self.data_loader.load()
         return self
+    
+    def analyze_dataset(self) -> DatasetAnalysis:
+        """Run comprehensive dataset analysis."""
+        analyzer = DatasetAnalyzer(self.questions, self.config)
+        self.dataset_analysis = analyzer.analyze()
+        return self.dataset_analysis
     
     async def evaluate_model(
         self,
@@ -1048,6 +1603,19 @@ class KalshiBenchRunner:
         logger.info("📊 Computing metrics...")
         metrics = self.metrics_calc.compute_all(predictions, self.questions)
         
+        # Calculate token usage and cost
+        total_input_tokens = sum(p.input_tokens for p in predictions)
+        total_output_tokens = sum(p.output_tokens for p in predictions)
+        total_tokens = total_input_tokens + total_output_tokens
+        
+        # Calculate cost based on model pricing
+        input_cost = (total_input_tokens / 1_000_000) * model_config.price_per_1m_input
+        output_cost = (total_output_tokens / 1_000_000) * model_config.price_per_1m_output
+        total_cost = input_cost + output_cost
+        
+        logger.info(f"💰 Token usage: {total_input_tokens:,} in / {total_output_tokens:,} out = {total_tokens:,} total")
+        logger.info(f"💵 Cost: ${total_cost:.4f} (${input_cost:.4f} in + ${output_cost:.4f} out)")
+        
         # Build result
         result = EvaluationResult(
             model_name=model_config.name,
@@ -1055,6 +1623,10 @@ class KalshiBenchRunner:
             timestamp=datetime.now().isoformat(),
             num_samples=len(self.questions),
             predictions=[asdict(p) for p in predictions],
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_tokens=total_tokens,
+            total_cost_usd=round(total_cost, 4),
             **metrics,
         )
         
@@ -1095,6 +1667,9 @@ class KalshiBenchRunner:
         logger.info("=" * 60)
         
         self.load_data()
+        
+        # Run dataset analysis
+        self.analyze_dataset()
         
         # Count valid models
         valid_models = [key for key in model_keys if key in MODELS]
@@ -1181,10 +1756,17 @@ class KalshiBenchRunner:
             json.dump(metadata, f, indent=2)
         print(f"Saved: {meta_path}")
         
-        # 4. Generate paper prompts
+        # 4. Save dataset analysis
+        if self.dataset_analysis:
+            analysis_path = os.path.join(self.config.output_dir, f"dataset_analysis_{timestamp}.json")
+            with open(analysis_path, "w") as f:
+                json.dump(self.dataset_analysis.model_dump(), f, indent=2, default=str)
+            print(f"Saved: {analysis_path}")
+        
+        # 5. Generate paper prompts
         self._save_paper_prompts(timestamp)
         
-        # 5. Generate markdown report
+        # 6. Generate markdown report
         self._save_markdown_report(timestamp)
         
         return summary_path
@@ -1219,6 +1801,10 @@ class KalshiBenchRunner:
                 "overconfidence_rate_80": result.overconfidence_rate_80,
                 "parse_rate": result.parse_rate,
                 "avg_latency_ms": result.avg_latency_ms,
+                "total_input_tokens": result.total_input_tokens,
+                "total_output_tokens": result.total_output_tokens,
+                "total_tokens": result.total_tokens,
+                "total_cost_usd": result.total_cost_usd,
             }
         
         # Leaderboards
@@ -1245,11 +1831,55 @@ class KalshiBenchRunner:
     def _save_paper_prompts(self, timestamp: str):
         """Save prompts for generating paper sections."""
         summary = self._generate_summary()
+        da = self.dataset_analysis  # Shorthand
+        
+        # Build dataset analysis section for prompts
+        dataset_analysis_text = ""
+        if da:
+            # Helper for time horizon stats (may be None)
+            th = da.time_horizon_stats
+            th_mean = th.mean_days_ahead if th else 0
+            th_median = th.median_days_ahead if th else 0
+            th_min = th.min_days_ahead if th else 0
+            th_max = th.max_days_ahead if th else 0
+            
+            dataset_analysis_text = f"""
+## DATASET ANALYSIS (Critical for Paper)
+
+### Temporal Characteristics
+- Date Range: {da.date_range.earliest or 'N/A'} to {da.date_range.latest or 'N/A'}
+- Temporal Span: {da.date_range.span_days} days
+- Time Horizon (days from cutoff to resolution):
+  - Mean: {th_mean:.1f} days
+  - Median: {th_median:.1f} days
+  - Range: {th_min} - {th_max} days
+
+### Ground Truth Analysis
+- Overall Yes Rate: {da.ground_truth_distribution.yes_rate:.1%}
+- Yes: {da.ground_truth_distribution.yes}, No: {da.ground_truth_distribution.no}
+- Ground Truth by Category:
+{json.dumps({k: v.model_dump() for k, v in da.ground_truth_by_category.items()}, indent=2)}
+
+### Category Distribution
+- Number of Categories: {da.num_categories}
+- Category Entropy: {da.category_entropy:.2f} bits (measures diversity)
+- Largest Category: {da.largest_category}
+- Smallest Category: {da.smallest_category}
+- Full Distribution:
+{json.dumps(da.category_distribution, indent=2)}
+
+### Question Complexity
+- Question Length: mean={da.question_length_stats.mean:.0f}, median={da.question_length_stats.median:.0f}, std={da.question_length_stats.std:.0f} chars
+- Description Length: mean={da.description_length_stats.mean:.0f}, median={da.description_length_stats.median:.0f} chars
+- Vocabulary Size: {da.total_vocabulary_size:,} unique words
+- Avg Words per Question: {da.avg_words_per_question:.1f}
+"""
         
         # Methods section prompt
         methods_prompt = f"""You are a scientific writer preparing the Methods section for a NeurIPS Datasets & Benchmarks paper.
 
 ## Benchmark: KalshiBench
+{dataset_analysis_text}
 
 ### Data Source
 - Platform: Kalshi (CFTC-regulated prediction market)
@@ -1296,9 +1926,10 @@ class KalshiBenchRunner:
 {json.dumps([{"name": k, "provider": v["provider"]} for k, v in [(name, asdict(MODELS[name.lower().replace('-', '_').replace('.', '_').replace(' ', '-')])) for name in self.results.keys() if name.lower().replace('-', '_').replace('.', '_').replace(' ', '-') in MODELS] if v], indent=2)}
 
 Write a formal Methods section (3-4 paragraphs) suitable for NeurIPS covering:
-1. Benchmark construction and rationale
+1. Benchmark construction and rationale (USE THE DATASET ANALYSIS STATS!)
 2. Evaluation protocol and metrics
 3. Model selection criteria
+4. Description of the dataset characteristics (temporal span, category diversity, question complexity)
 """
         
         # Results section prompt
@@ -1316,6 +1947,7 @@ Write a formal Methods section (3-4 paragraphs) suitable for NeurIPS covering:
         } for name, r in self.results.items()}
         
         results_prompt = f"""You are a scientific writer preparing the Results section for a NeurIPS Datasets & Benchmarks paper on KalshiBench.
+{dataset_analysis_text}
 
 ## Evaluation Results
 
@@ -1333,33 +1965,134 @@ Structure the Results section as follows:
 - Report accuracy and F1 across all models
 - Identify best and worst performers
 - Note any surprising results (e.g., smaller models outperforming larger ones)
+- Highlight any model family patterns (e.g., reasoning models vs standard models)
 
 **Paragraph 2: Calibration Analysis (KEY CONTRIBUTION)**
 - This is the main contribution of KalshiBench
 - Compare Brier Scores across models (THE key metric for forecasting)
 - Discuss ECE - which models are best calibrated?
 - Analyze gap between accuracy and calibration (a model can be accurate but poorly calibrated)
+- Compare Brier Skill Score to show improvement over naive baseline
 
 **Paragraph 3: Overconfidence Analysis**
-- Report overconfidence rates
+- Report overconfidence rates at 80% threshold
 - Which models are most/least overconfident?
-- Discuss implications for deployment
+- Discuss implications for real-world deployment
+- Do reasoning models (o1, DeepSeek-R1, QwQ) show better calibration?
 
 **Paragraph 4: Category Breakdown**
 - Are there categories where models struggle?
 - Do different models have different strengths?
+- Which categories show best/worst calibration?
 
 **Paragraph 5: Key Findings**
 - Summarize main takeaways
-- What does this reveal about current LLM capabilities?
-- Implications for using LLMs for forecasting
+- What does this reveal about current LLM forecasting capabilities?
+- Implications for using LLMs for forecasting tasks
+- Recommendations for model selection based on calibration needs
 
 Use precise numbers, scientific language, and draw meaningful conclusions. Create 1-2 tables summarizing key results.
+"""
+        
+        # Dataset section prompt (dedicated for NeurIPS Datasets & Benchmarks)
+        dataset_prompt = ""
+        if da:
+            # Helper for time horizon stats (may be None)
+            th = da.time_horizon_stats
+            th_mean = th.mean_days_ahead if th else 0
+            th_median = th.median_days_ahead if th else 0
+            th_min = th.min_days_ahead if th else 0
+            th_max = th.max_days_ahead if th else 0
+            
+            # Calculate imbalance ratio
+            yes_ct = da.ground_truth_distribution.yes or 1
+            no_ct = da.ground_truth_distribution.no or 1
+            imbalance = max(yes_ct, no_ct) / max(min(yes_ct, no_ct), 1)
+            
+            dataset_prompt = f"""You are a scientific writer preparing the Dataset section for a NeurIPS Datasets & Benchmarks paper.
+
+## Dataset: KalshiBench
+
+### What is KalshiBench?
+
+KalshiBench is a benchmark for evaluating LLM forecasting calibration using real-world prediction markets from Kalshi, a CFTC-regulated prediction market platform. Unlike traditional benchmarks that measure accuracy on static knowledge, KalshiBench evaluates whether models can make well-calibrated probabilistic predictions on questions with verifiable real-world outcomes.
+
+**Key Innovation:** By using temporally-filtered prediction market questions, we ensure models cannot have memorized the answers during training—the questions resolve AFTER the models' knowledge cutoffs.
+
+### Overview Statistics
+- Total Questions: {da.total_questions}
+- Knowledge Cutoff: {da.knowledge_cutoff}
+- Source: Kalshi (CFTC-regulated prediction market)
+
+### Temporal Characteristics
+- Date Range: {da.date_range.earliest or 'N/A'} to {da.date_range.latest or 'N/A'}
+- Temporal Span: {da.date_range.span_days} days
+- Mean Time Horizon: {th_mean:.1f} days (from cutoff to resolution)
+- Median Time Horizon: {th_median:.1f} days
+- Time Horizon Range: {th_min} - {th_max} days
+
+### Label Distribution Analysis
+- Yes Rate: {da.ground_truth_distribution.yes_rate:.1%}
+- Yes Count: {da.ground_truth_distribution.yes}
+- No Count: {da.ground_truth_distribution.no}
+- Imbalance Ratio: {imbalance:.2f}:1
+
+### Ground Truth by Category (potential biases!)
+{json.dumps({k: v.model_dump() for k, v in da.ground_truth_by_category.items()}, indent=2)}
+
+### Ground Truth by Month (temporal bias analysis)
+{json.dumps({k: v.model_dump() for k, v in da.ground_truth_by_month.items()}, indent=2)}
+
+### Category Distribution
+- Number of Categories: {da.num_categories}
+- Shannon Entropy: {da.category_entropy:.2f} bits (higher = more diverse)
+- Largest Category: {da.largest_category}
+- Smallest Category: {da.smallest_category}
+- Distribution:
+{json.dumps(da.category_distribution, indent=2)}
+
+### Question Complexity Analysis
+- Question Length: mean={da.question_length_stats.mean:.0f}, median={da.question_length_stats.median:.0f}, std={da.question_length_stats.std:.0f} characters
+- Description Length: mean={da.description_length_stats.mean:.0f}, median={da.description_length_stats.median:.0f} characters  
+- Total Vocabulary: {da.total_vocabulary_size:,} unique words
+- Avg Words per Question: {da.avg_words_per_question:.1f}
+
+## Writing Instructions
+
+Write a formal Dataset section (2-3 paragraphs) suitable for NeurIPS Datasets & Benchmarks covering:
+
+**Paragraph 1: Data Collection & Source**
+- Describe Kalshi as the data source (CFTC-regulated, real money)
+- Explain why prediction markets are valuable for forecasting evaluation
+- Questions have real-world outcomes that can be objectively verified
+- Mention temporal filtering to prevent data contamination
+
+**Paragraph 2: Dataset Construction & Processing**
+- Describe the two-step dataset creation process:
+  1. Raw data extraction from Kalshi API
+  2. Cleaning, deduplication, and standardization into KalshiBench dataset
+- Explain that dataset is deduplicated by series_ticker to avoid related questions
+- Note that only resolved binary yes/no markets are included
+
+**Paragraph 3: Dataset Statistics & Characteristics**
+- Report key statistics (size, categories, temporal span)
+- Discuss label distribution and potential biases
+- Describe question complexity metrics
+- Note the category diversity (entropy measure)
+
+**Key Points to Emphasize:**
+1. Real-world grounding: Questions have real monetary stakes
+2. Temporal integrity: Knowledge cutoff prevents memorization
+3. Clean evaluation: Pre-processed, deduplicated dataset
+4. Diversity: Multiple categories spanning politics, economics, science, etc.
+
+Create a summary statistics table with the most important metrics.
 """
         
         # Save prompts
         methods_path = os.path.join(self.config.output_dir, f"paper_methods_prompt_{timestamp}.txt")
         results_path = os.path.join(self.config.output_dir, f"paper_results_prompt_{timestamp}.txt")
+        dataset_path = os.path.join(self.config.output_dir, f"paper_dataset_prompt_{timestamp}.txt")
         
         with open(methods_path, "w") as f:
             f.write(methods_prompt)
@@ -1368,98 +2101,383 @@ Use precise numbers, scientific language, and draw meaningful conclusions. Creat
         with open(results_path, "w") as f:
             f.write(results_prompt)
         print(f"Saved: {results_path}")
+        
+        if dataset_prompt:
+            with open(dataset_path, "w") as f:
+                f.write(dataset_prompt)
+            print(f"Saved: {dataset_path}")
     
     def _save_markdown_report(self, timestamp: str):
-        """Save a human-readable markdown report."""
+        """Save a comprehensive human-readable markdown report."""
         summary = self._generate_summary()
+        da = self.dataset_analysis
         
-        # Build tables
-        accuracy_table = "| Model | Accuracy | Macro F1 | Brier Score | ECE | Parse Rate |\n"
-        accuracy_table += "|-------|----------|----------|-------------|-----|------------|\n"
-        for name, metrics in summary["models"].items():
-            accuracy_table += f"| {name} | {metrics['accuracy']:.2%} | {metrics['macro_f1']:.3f} | {metrics['brier_score']:.4f} | {metrics['ece']:.4f} | {metrics['parse_rate']:.2%} |\n"
+        # =====================================================================
+        # DATASET ANALYSIS SECTION
+        # =====================================================================
+        dataset_section = ""
+        if da:
+            th = da.time_horizon_stats
+            th_mean = th.mean_days_ahead if th else 0
+            th_median = th.median_days_ahead if th else 0
+            th_std = th.std_days_ahead if th else 0
+            th_min = th.min_days_ahead if th else 0
+            th_max = th.max_days_ahead if th else 0
+            
+            # Category distribution table
+            cat_table = "| Category | Count | % | Yes Rate |\n"
+            cat_table += "|----------|-------|---|----------|\n"
+            for cat, count in sorted(da.category_distribution.items(), key=lambda x: -x[1]):
+                pct = count / da.total_questions * 100
+                yes_rate = da.ground_truth_by_category.get(cat)
+                yr_str = f"{yes_rate.yes_rate:.1%}" if yes_rate else "N/A"
+                cat_table += f"| {cat} | {count} | {pct:.1f}% | {yr_str} |\n"
+            
+            # Monthly distribution table
+            month_table = "| Month | Count | Yes Rate |\n"
+            month_table += "|-------|-------|----------|\n"
+            for month, data in sorted(da.ground_truth_by_month.items()):
+                month_table += f"| {month} | {data.total} | {data.yes_rate:.1%} |\n"
+            
+            dataset_section = f"""
+## Dataset Analysis
+
+### Overview
+- **Total Questions:** {da.total_questions}
+- **Knowledge Cutoff:** {da.knowledge_cutoff}
+- **Source:** Kalshi (CFTC-regulated prediction market)
+
+### Temporal Distribution
+
+| Metric | Value |
+|--------|-------|
+| Date Range | {da.date_range.earliest or 'N/A'} to {da.date_range.latest or 'N/A'} |
+| Temporal Span | {da.date_range.span_days} days |
+| Mean Time Horizon | {th_mean:.1f} days |
+| Median Time Horizon | {th_median:.1f} days |
+| Std Dev Time Horizon | {th_std:.1f} days |
+| Min Time Horizon | {th_min} days |
+| Max Time Horizon | {th_max} days |
+
+#### Questions by Month
+
+{month_table}
+
+### Ground Truth Distribution
+
+| Outcome | Count | Percentage |
+|---------|-------|------------|
+| Yes | {da.ground_truth_distribution.yes} | {da.ground_truth_distribution.yes_rate:.1%} |
+| No | {da.ground_truth_distribution.no} | {1 - da.ground_truth_distribution.yes_rate:.1%} |
+
+### Category Distribution
+
+- **Number of Categories:** {da.num_categories}
+- **Category Entropy:** {da.category_entropy:.2f} bits (max = {np.log2(da.num_categories):.2f} bits)
+- **Largest Category:** {da.largest_category} ({da.category_distribution.get(da.largest_category, 0)} questions)
+- **Smallest Category:** {da.smallest_category} ({da.category_distribution.get(da.smallest_category, 0)} questions)
+
+{cat_table}
+
+### Question Complexity
+
+| Metric | Mean | Median | Std | Min | Max |
+|--------|------|--------|-----|-----|-----|
+| Question Length (chars) | {da.question_length_stats.mean:.0f} | {da.question_length_stats.median:.0f} | {da.question_length_stats.std:.0f} | {da.question_length_stats.min} | {da.question_length_stats.max} |
+| Description Length (chars) | {da.description_length_stats.mean:.0f} | {da.description_length_stats.median:.0f} | {da.description_length_stats.std:.0f} | {da.description_length_stats.min} | {da.description_length_stats.max} |
+
+- **Total Vocabulary Size:** {da.total_vocabulary_size:,} unique words
+- **Average Words per Question:** {da.avg_words_per_question:.1f}
+
+"""
         
-        calibration_table = "| Model | Brier Score | BSS | ECE | MCE | Log Loss | Overconf@80% |\n"
-        calibration_table += "|-------|-------------|-----|-----|-----|----------|---------------|\n"
-        for name, metrics in summary["models"].items():
-            overconf = f"{metrics['overconfidence_rate_80']:.2%}" if metrics['overconfidence_rate_80'] else "N/A"
-            calibration_table += f"| {name} | {metrics['brier_score']:.4f} | {metrics['brier_skill_score']:.4f} | {metrics['ece']:.4f} | {metrics['mce']:.4f} | {metrics['log_loss']:.4f} | {overconf} |\n"
+        # =====================================================================
+        # SUMMARY TABLES
+        # =====================================================================
         
-        # Category breakdown for best model
-        best_model = summary["leaderboard"]["by_accuracy"][0]["model"] if summary["leaderboard"]["by_accuracy"] else None
-        category_section = ""
-        if best_model and best_model in self.results:
-            category_section = f"\n### Category Breakdown ({best_model})\n\n"
-            category_section += "| Category | Accuracy | Brier Score | Count |\n"
-            category_section += "|----------|----------|-------------|-------|\n"
-            for cat, data in self.results[best_model].per_category.items():
+        # Classification summary table
+        accuracy_table = "| Model | Accuracy | Macro F1 | Precision (Yes) | Recall (Yes) | F1 (Yes) | Parse Rate |\n"
+        accuracy_table += "|-------|----------|----------|-----------------|--------------|----------|------------|\n"
+        for name, result in self.results.items():
+            accuracy_table += f"| {name} | {result.accuracy:.2%} | {result.macro_f1:.3f} | {result.precision_yes:.3f} | {result.recall_yes:.3f} | {result.f1_yes:.3f} | {result.parse_rate:.2%} |\n"
+        
+        # Calibration summary table
+        calibration_table = "| Model | Brier | BSS | ECE | MCE | ACE | Log Loss |\n"
+        calibration_table += "|-------|-------|-----|-----|-----|-----|----------|\n"
+        for name, result in self.results.items():
+            brier = f"{result.brier_score:.4f}" if result.brier_score else "N/A"
+            bss = f"{result.brier_skill_score:.4f}" if result.brier_skill_score else "N/A"
+            ece = f"{result.ece:.4f}" if result.ece else "N/A"
+            mce = f"{result.mce:.4f}" if result.mce else "N/A"
+            ace = f"{result.ace:.4f}" if result.ace else "N/A"
+            ll = f"{result.log_loss:.4f}" if result.log_loss else "N/A"
+            calibration_table += f"| {name} | {brier} | {bss} | {ece} | {mce} | {ace} | {ll} |\n"
+        
+        # Confidence analysis table
+        confidence_table = "| Model | Avg Conf | Conf When Correct | Conf When Wrong | Overconf@70% | Overconf@80% | Overconf@90% |\n"
+        confidence_table += "|-------|----------|-------------------|-----------------|--------------|--------------|---------------|\n"
+        for name, result in self.results.items():
+            avg_conf = f"{result.avg_confidence:.2%}" if result.avg_confidence else "N/A"
+            conf_correct = f"{result.avg_confidence_when_correct:.2%}" if result.avg_confidence_when_correct else "N/A"
+            conf_wrong = f"{result.avg_confidence_when_wrong:.2%}" if result.avg_confidence_when_wrong else "N/A"
+            oc70 = f"{result.overconfidence_rate_70:.2%}" if result.overconfidence_rate_70 else "N/A"
+            oc80 = f"{result.overconfidence_rate_80:.2%}" if result.overconfidence_rate_80 else "N/A"
+            oc90 = f"{result.overconfidence_rate_90:.2%}" if result.overconfidence_rate_90 else "N/A"
+            confidence_table += f"| {name} | {avg_conf} | {conf_correct} | {conf_wrong} | {oc70} | {oc80} | {oc90} |\n"
+        
+        # Token usage and cost table
+        cost_table = "| Model | Input Tokens | Output Tokens | Total Tokens | Cost (USD) |\n"
+        cost_table += "|-------|--------------|---------------|--------------|------------|\n"
+        total_all_tokens = 0
+        total_all_cost = 0.0
+        for name, result in self.results.items():
+            cost_table += f"| {name} | {result.total_input_tokens:,} | {result.total_output_tokens:,} | {result.total_tokens:,} | ${result.total_cost_usd:.4f} |\n"
+            total_all_tokens += result.total_tokens
+            total_all_cost += result.total_cost_usd
+        cost_table += f"| **TOTAL** | - | - | **{total_all_tokens:,}** | **${total_all_cost:.4f}** |\n"
+        
+        # =====================================================================
+        # PER-MODEL DETAILED SECTIONS
+        # =====================================================================
+        model_details = ""
+        for name, result in self.results.items():
+            # Confusion matrix
+            cm = result.confusion_matrix
+            cm_table = f"""
+```
+                 Predicted
+              Yes        No
+           ┌─────────┬─────────┐
+Actual Yes │   {cm['tp']:>4}   │   {cm['fn']:>4}   │
+           ├─────────┼─────────┤
+Actual No  │   {cm['fp']:>4}   │   {cm['tn']:>4}   │
+           └─────────┴─────────┘
+```
+"""
+            
+            # Reliability diagram as ASCII
+            rel_diagram = "| Bin | Avg Confidence | Avg Accuracy | Count | Gap |\n"
+            rel_diagram += "|-----|----------------|--------------|-------|-----|\n"
+            for bin_data in result.reliability_diagram:
+                gap = bin_data['avg_confidence'] - bin_data['avg_accuracy']
+                gap_str = f"+{gap:.3f}" if gap > 0 else f"{gap:.3f}"
+                rel_diagram += f"| {bin_data['bin']} | {bin_data['avg_confidence']:.3f} | {bin_data['avg_accuracy']:.3f} | {bin_data['count']} | {gap_str} |\n"
+            
+            # Category breakdown
+            cat_breakdown = "| Category | Accuracy | Brier Score | Count |\n"
+            cat_breakdown += "|----------|----------|-------------|-------|\n"
+            for cat, data in sorted(result.per_category.items(), key=lambda x: -x[1]['count']):
                 brier = f"{data['brier_score']:.4f}" if data['brier_score'] else "N/A"
-                category_section += f"| {cat} | {data['accuracy']:.2%} | {brier} | {data['count']} |\n"
+                cat_breakdown += f"| {cat} | {data['accuracy']:.2%} | {brier} | {data['count']} |\n"
+            
+            model_details += f"""
+---
+
+## {name}
+
+**Model Configuration:**
+- **Provider:** {result.model_config.get('provider', 'N/A')}
+- **Model ID:** {result.model_config.get('litellm_model', 'N/A')}
+- **Knowledge Cutoff:** {result.model_config.get('knowledge_cutoff', 'N/A')}
+- **Temperature:** {result.model_config.get('temperature', 'N/A')}
+
+### All Metrics
+
+#### Classification Metrics
+
+| Metric | Value |
+|--------|-------|
+| Accuracy | {result.accuracy:.4f} ({result.accuracy:.2%}) |
+| Macro F1 | {result.macro_f1:.4f} |
+| Precision (Yes) | {result.precision_yes:.4f} |
+| Recall (Yes) | {result.recall_yes:.4f} |
+| F1 (Yes) | {result.f1_yes:.4f} |
+| Precision (No) | {result.precision_no:.4f} |
+| Recall (No) | {result.recall_no:.4f} |
+| F1 (No) | {result.f1_no:.4f} |
+
+#### Calibration Metrics
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Brier Score | {result.brier_score:.4f} | Lower is better (0 = perfect) |
+| Brier Skill Score | {result.brier_skill_score:.4f} | Higher is better (improvement over base rate) |
+| ECE | {result.ece:.4f} | Lower is better (expected calibration error) |
+| MCE | {result.mce:.4f} | Lower is better (max calibration error) |
+| ACE | {result.ace:.4f} | Lower is better (adaptive calibration error) |
+| Log Loss | {result.log_loss:.4f} | Lower is better |
+
+#### Confidence Analysis
+
+| Metric | Value |
+|--------|-------|
+| Average Confidence | {result.avg_confidence:.4f} |
+| Avg Confidence When Correct | {result.avg_confidence_when_correct if result.avg_confidence_when_correct else 'N/A'} |
+| Avg Confidence When Wrong | {result.avg_confidence_when_wrong if result.avg_confidence_when_wrong else 'N/A'} |
+| Overconfidence Rate @70% | {result.overconfidence_rate_70 if result.overconfidence_rate_70 else 'N/A'} |
+| Overconfidence Rate @80% | {result.overconfidence_rate_80 if result.overconfidence_rate_80 else 'N/A'} |
+| Overconfidence Rate @90% | {result.overconfidence_rate_90 if result.overconfidence_rate_90 else 'N/A'} |
+
+#### Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Parse Rate | {result.parse_rate:.4f} ({result.parse_rate:.2%}) |
+| Avg Latency | {result.avg_latency_ms:.1f} ms |
+
+#### Token Usage & Cost
+
+| Metric | Value |
+|--------|-------|
+| Input Tokens | {result.total_input_tokens:,} |
+| Output Tokens | {result.total_output_tokens:,} |
+| Total Tokens | {result.total_tokens:,} |
+| Total Cost | ${result.total_cost_usd:.4f} |
+
+### Confusion Matrix
+
+{cm_table}
+
+- **True Positives (TP):** {cm['tp']} - Correctly predicted "yes"
+- **True Negatives (TN):** {cm['tn']} - Correctly predicted "no"
+- **False Positives (FP):** {cm['fp']} - Incorrectly predicted "yes" (actual was "no")
+- **False Negatives (FN):** {cm['fn']} - Incorrectly predicted "no" (actual was "yes")
+
+### Reliability Diagram
+
+Shows calibration: ideally, avg_accuracy should equal avg_confidence in each bin.
+
+{rel_diagram}
+
+**Interpretation:**
+- **Gap > 0:** Model is overconfident (confidence > accuracy)
+- **Gap < 0:** Model is underconfident (confidence < accuracy)
+- **Gap ≈ 0:** Well-calibrated
+
+### Category Breakdown
+
+{cat_breakdown}
+
+"""
         
+        # =====================================================================
+        # LEADERBOARDS
+        # =====================================================================
+        leaderboard_section = f"""
+## Leaderboards
+
+### By Accuracy (Higher is Better)
+
+| Rank | Model | Accuracy |
+|------|-------|----------|
+{chr(10).join([f"| {i+1} | {m['model']} | {m['accuracy']:.2%} |" for i, m in enumerate(summary['leaderboard']['by_accuracy'])])}
+
+### By Brier Score (Lower is Better)
+
+| Rank | Model | Brier Score |
+|------|-------|-------------|
+{chr(10).join([f"| {i+1} | {m['model']} | {m['brier_score']:.4f} |" for i, m in enumerate(summary['leaderboard']['by_brier_score'])])}
+
+### By ECE (Lower is Better)
+
+| Rank | Model | ECE |
+|------|-------|-----|
+{chr(10).join([f"| {i+1} | {m['model']} | {m['ece']:.4f} |" for i, m in enumerate(summary['leaderboard']['by_calibration'])])}
+
+"""
+        
+        # =====================================================================
+        # ASSEMBLE FULL REPORT
+        # =====================================================================
         report = f"""# KalshiBench Evaluation Report
 
-**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
 **Benchmark Version:** 1.0
 
-## Overview
+---
 
-KalshiBench evaluates language model forecasting ability using temporally-filtered prediction market questions from Kalshi.
+## Executive Summary
 
-- **Total Questions:** {len(self.questions)}
-- **Knowledge Cutoff:** {self.config.knowledge_cutoff}
-- **Models Evaluated:** {len(self.results)}
+KalshiBench evaluates language model forecasting ability and calibration using temporally-filtered prediction market questions from Kalshi, a CFTC-regulated prediction market.
 
-## Main Results
+| Metric | Value |
+|--------|-------|
+| Total Questions | {len(self.questions)} |
+| Knowledge Cutoff | {self.config.knowledge_cutoff} |
+| Models Evaluated | {len(self.results)} |
+| Date Range | {min(q.close_time for q in self.questions)} to {max(q.close_time for q in self.questions)} |
+| Yes Rate | {sum(1 for q in self.questions if q.ground_truth == "yes")/len(self.questions):.1%} |
+
+{dataset_section}
+
+---
+
+## Model Comparison Summary
 
 ### Classification Performance
 
 {accuracy_table}
 
-### Calibration Analysis
+### Calibration Metrics
 
 {calibration_table}
 
-**Key Metrics:**
-- **Brier Score**: Lower is better (0 = perfect, 1 = worst)
-- **BSS (Brier Skill Score)**: Improvement over base rate (higher is better)
-- **ECE**: Expected Calibration Error (lower is better)
-- **Overconf@80%**: Rate of wrong predictions when confidence > 80%
+**Metric Definitions:**
+- **Brier:** Brier Score - mean squared error of probability predictions (lower = better)
+- **BSS:** Brier Skill Score - improvement over always predicting base rate (higher = better)
+- **ECE:** Expected Calibration Error - avg |confidence - accuracy| weighted by bin size (lower = better)
+- **MCE:** Maximum Calibration Error - worst-calibrated bin (lower = better)
+- **ACE:** Adaptive Calibration Error - ECE with equal-mass bins (lower = better)
 
-## Leaderboards
+### Confidence Analysis
 
-### By Accuracy
-{chr(10).join([f"{i+1}. **{m['model']}**: {m['accuracy']:.2%}" for i, m in enumerate(summary['leaderboard']['by_accuracy'][:5])])}
+{confidence_table}
 
-### By Calibration (Brier Score, lower is better)
-{chr(10).join([f"{i+1}. **{m['model']}**: {m['brier_score']:.4f}" for i, m in enumerate(summary['leaderboard']['by_brier_score'][:5])])}
+**Overconfidence Rate @X%:** Fraction of wrong predictions among those with confidence > X%
 
-### By ECE (lower is better)
-{chr(10).join([f"{i+1}. **{m['model']}**: {m['ece']:.4f}" for i, m in enumerate(summary['leaderboard']['by_calibration'][:5])])}
-{category_section}
-## Dataset Statistics
+### Token Usage & Cost
 
-- **Date Range:** {min(q.close_time for q in self.questions)} to {max(q.close_time for q in self.questions)}
-- **Ground Truth Distribution:**
-  - Yes: {sum(1 for q in self.questions if q.ground_truth == "yes")} ({sum(1 for q in self.questions if q.ground_truth == "yes")/len(self.questions):.1%})
-  - No: {sum(1 for q in self.questions if q.ground_truth == "no")} ({sum(1 for q in self.questions if q.ground_truth == "no")/len(self.questions):.1%})
+{cost_table}
+
+{leaderboard_section}
+
+---
+
+# Detailed Model Results
+
+{model_details}
+
+---
 
 ## Files Generated
 
-- `summary_*.json`: Aggregated results for all models
-- `<model>_*.json`: Individual model results with predictions
-- `metadata_*.json`: Benchmark configuration and statistics
-- `paper_methods_prompt_*.txt`: Prompt for generating Methods section
-- `paper_results_prompt_*.txt`: Prompt for generating Results section
+| File | Description |
+|------|-------------|
+| `summary_*.json` | Aggregated results for all models |
+| `<model>_*.json` | Individual model results with all predictions |
+| `metadata_*.json` | Benchmark configuration and dataset statistics |
+| `dataset_analysis_*.json` | Comprehensive dataset analysis |
+| `paper_methods_prompt_*.txt` | Prompt for generating Methods section |
+| `paper_results_prompt_*.txt` | Prompt for generating Results section |
+| `paper_dataset_prompt_*.txt` | Prompt for generating Dataset section |
+| `report_*.md` | This report |
+
+---
 
 ## Citation
 
 ```bibtex
 @misc{{kalshibench2024,
   title={{KalshiBench: Evaluating LLM Forecasting Calibration via Prediction Markets}},
+  author={{2084 Collective}},
   year={{2024}},
   note={{Evaluation of {len(self.results)} models on {len(self.questions)} prediction market questions}}
 }}
 ```
+
+---
+
+*Report generated by KalshiBench v1.0*
 """
         
         report_path = os.path.join(self.config.output_dir, f"report_{timestamp}.md")
@@ -1477,6 +2495,10 @@ def main():
         description="KalshiBench: Evaluate LLM forecasting calibration",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Dataset:
+  By default, loads from pre-cleaned '2084Collective/kalshibench-v2' dataset.
+  Use --raw to load from raw dataset with on-the-fly deduplication.
+
 Available models:
   OpenAI:    gpt-5.2, gpt-5.1, gpt-4o, gpt-4o-mini, o1, o1-mini, o3-mini
   Anthropic: claude-opus-4.5, claude-sonnet-4.5, claude-3-5-sonnet, claude-3-5-haiku
@@ -1528,6 +2550,17 @@ Example:
         action="store_true",
         help="List available models and exit",
     )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Use raw dataset with on-the-fly deduplication (legacy mode)",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Override dataset name (default: 2084Collective/kalshibench-v2)",
+    )
     
     args = parser.parse_args()
     
@@ -1553,14 +2586,25 @@ Example:
         output_dir=args.output,
         knowledge_cutoff=args.cutoff,
         max_concurrent=args.concurrent,
+        use_raw_dataset=args.raw,
     )
+    
+    # Override dataset name if provided
+    if args.dataset:
+        if args.raw:
+            config.raw_dataset_name = args.dataset
+        else:
+            config.dataset_name = args.dataset
     
     print("\n" + "=" * 60)
     print("KalshiBench - LLM Forecasting Calibration Benchmark")
     print("=" * 60)
+    dataset_mode = "raw (with dedup)" if args.raw else "pre-cleaned"
+    dataset_name = config.raw_dataset_name if args.raw else config.dataset_name
+    print(f"Dataset: {dataset_name} ({dataset_mode})")
     print(f"Models: {', '.join(args.models)}")
     print(f"Samples: {args.samples}")
-    print(f"Knowledge Cutoff: {args.cutoff}")
+    print(f"Knowledge Cutoff: {args.cutoff or 'auto-computed'}")
     print(f"Output: {args.output}")
     
     # Run benchmark
