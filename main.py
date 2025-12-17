@@ -31,6 +31,7 @@ def _write_dotenv_from_env(path: str) -> None:
         "TOGETHER_API_KEY",
         "GEMINI_API_KEY",
         "HF_TOKEN",  # For HuggingFace dataset upload
+        "FIREWORKS_API_KEY",
     ]
     lines: list[str] = []
     for k in keys:
@@ -56,6 +57,9 @@ test_image = (
 DATASET_OUTPUT_DIR = "/neurips_results"
 DATASET_FOLDER_NAME = "kalshibench_v2_" + datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
 DATASET_OUTPUT_PATH = os.path.join(DATASET_OUTPUT_DIR, DATASET_FOLDER_NAME)
+PREVIOUS_RUN_DIR = "/neurips_results/kalshibench_v2_2025-12-17_20-11-23"
+PREVIOUS_RUN_DIR = os.path.join(DATASET_OUTPUT_DIR, "kalshibench_v2_2025-12-17_20-11-23")
+PREVIOUS_RUN_PATH = os.path.join(DATASET_OUTPUT_DIR, "kalshibench_v2_2025-12-17_20-54-58")
 
 
 @app.function(
@@ -80,7 +84,13 @@ def run_neurips_full() -> None:
     """Run the full NeurIPS benchmark across all model tiers."""
     import subprocess
     _write_dotenv_from_env(os.path.join(REPO_DIR, ".env"))
-    _ = subprocess.run(["bash", "run_full.sh", "--output-dir", DATASET_OUTPUT_PATH], cwd=REPO_DIR, check=True)
+    command = [
+        "uv", "run", "python", "run_neurips_benchmark.py", "--full",
+        "--output", DATASET_OUTPUT_PATH,
+        "--previous-run", PREVIOUS_RUN_DIR,
+    ]
+    print(f"Running command: {command}")
+    _ = subprocess.run(command, cwd=REPO_DIR, check=True)
 
 
 @app.function(
@@ -116,18 +126,18 @@ def create_kalshibench_dataset(
 
 # @app.local_entrypoint()
 # def test():
-    """Run test benchmark (quick validation)."""
-    # _ = cast(_ModalRemoteFn, create_kalshibench_dataset).remote(
-    #     output_path=DATASET_OUTPUT_DIR,
-    # )
-    # _ = cast(_ModalRemoteFn, run_neurips_test).remote()
+#     """Run test benchmark (quick validation)."""
+#     # _ = cast(_ModalRemoteFn, create_kalshibench_dataset).remote(
+#     #     output_path=DATASET_OUTPUT_DIR,
+#     # )
+#     _ = cast(_ModalRemoteFn, run_neurips_test).remote()
 
 
 @app.local_entrypoint()
 def full():
     """Run full NeurIPS benchmark across all model tiers."""
-    _ = cast(_ModalRemoteFn, create_kalshibench_dataset).remote(
-        output_path=DATASET_OUTPUT_DIR,
-    )
+    # _ = cast(_ModalRemoteFn, create_kalshibench_dataset).remote(
+    #     output_path=DATASET_OUTPUT_DIR,
+    # )
     _ = cast(_ModalRemoteFn, run_neurips_full).remote()
 

@@ -51,21 +51,23 @@ class ModelProvider(Enum):
     ANTHROPIC = "anthropic"
     TOGETHER = "together"
     GOOGLE = "google"
+    FIREWORKS = "fireworks"
 
 
-@dataclass
-class ModelConfig:
+class ModelConfig(PydanticBaseModel):
     """Configuration for a model to evaluate."""
     name: str
     litellm_model: str
     provider: ModelProvider
     knowledge_cutoff: str  # YYYY-MM-DD format
     description: str = ""
-    max_tokens: int = 1024
+    max_tokens: int = 32768
     temperature: float = 0.7
     # Pricing per 1M tokens (input, output) in USD
     price_per_1m_input: float = 0.0
     price_per_1m_output: float = 0.0
+    # Reasoning effort for models that support it (e.g., GPT-5.2: "low", "medium", "high", "xhigh")
+    reasoning_effort: Optional[str] = None
 
 
 # Token estimation constants
@@ -129,45 +131,124 @@ MODELS = {
     # ==========================================================================
     "gpt-5.2": ModelConfig(
         name="GPT-5.2",
-        litellm_model="gpt-5.2",
+        litellm_model="openai/gpt-5.2",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2025-10-01",
         description="OpenAI GPT-5.2 (Dec 2025)",
+        temperature=1.0,  # GPT-5 only supports temperature=1
         price_per_1m_input=5.00,
         price_per_1m_output=15.00,
+        reasoning_effort="medium",
+    ),
+    "gpt-5.2-low": ModelConfig(
+        name="GPT-5.2-Low",
+        litellm_model="openai/gpt-5.2",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-10-01",
+        description="OpenAI GPT-5.2 with low reasoning effort",
+        temperature=1.0,  # GPT-5 only supports temperature=1
+        price_per_1m_input=5.00,
+        price_per_1m_output=15.00,
+        reasoning_effort="low",
+    ),
+    "gpt-5.2-high": ModelConfig(
+        name="GPT-5.2-High",
+        litellm_model="openai/gpt-5.2",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-10-01",
+        description="OpenAI GPT-5.2 with high reasoning effort",
+        temperature=1.0,  # GPT-5 only supports temperature=1
+        price_per_1m_input=5.00,
+        price_per_1m_output=15.00,
+        reasoning_effort="high",
+    ),
+    "gpt-5.2-xhigh": ModelConfig(
+        name="GPT-5.2-XHigh",
+        litellm_model="openai/gpt-5.2",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-10-01",
+        description="OpenAI GPT-5.2 with extra-high reasoning effort (exclusive to 5.2)",
+        temperature=1.0,  # GPT-5 only supports temperature=1
+        price_per_1m_input=5.00,
+        price_per_1m_output=15.00,
+        reasoning_effort="xhigh",
     ),
     "gpt-5.1": ModelConfig(
         name="GPT-5.1",
-        litellm_model="gpt-5.1",
+        litellm_model="openai/gpt-5.1",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2025-08-01",
-        description="OpenAI GPT-5.1 (Nov 2025)",
+        description="OpenAI GPT-5.1 (Nov 2025, default reasoning=none)",
         price_per_1m_input=4.00,
         price_per_1m_output=12.00,
+        # GPT-5.1 with reasoning_effort=none supports temperature
+    ),
+    "gpt-5.1-medium": ModelConfig(
+        name="GPT-5.1-Medium",
+        litellm_model="openai/gpt-5.1",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-08-01",
+        description="OpenAI GPT-5.1 with medium reasoning effort",
+        temperature=1.0,  # GPT-5.1 with reasoning needs temperature=1
+        price_per_1m_input=4.00,
+        price_per_1m_output=12.00,
+        reasoning_effort="medium",
+    ),
+    "gpt-5.1-high": ModelConfig(
+        name="GPT-5.1-High",
+        litellm_model="openai/gpt-5.1",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-08-01",
+        description="OpenAI GPT-5.1 with high reasoning effort",
+        temperature=1.0,  # GPT-5.1 with reasoning needs temperature=1
+        price_per_1m_input=4.00,
+        price_per_1m_output=12.00,
+        reasoning_effort="high",
     ),
     # OpenAI - GPT-4o series
     "gpt-4o": ModelConfig(
         name="GPT-4o",
-        litellm_model="gpt-4o",
+        litellm_model="openai/gpt-4o",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2024-10-01",
         description="OpenAI GPT-4o flagship multimodal",
         price_per_1m_input=2.50,
         price_per_1m_output=10.00,
+        max_tokens=16384,
     ),
     "gpt-4o-mini": ModelConfig(
         name="GPT-4o-mini",
-        litellm_model="gpt-4o-mini",
+        litellm_model="openai/gpt-4o-mini",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2024-10-01",
         description="OpenAI GPT-4o-mini (fast, affordable)",
         price_per_1m_input=0.15,
         price_per_1m_output=0.60,
     ),
+    "gpt-5-mini": ModelConfig(
+        name="GPT-5-Mini",
+        litellm_model="openai/gpt-5-mini",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-08-01",
+        description="OpenAI GPT-5-Mini (small, efficient)",
+        price_per_1m_input=0.30,
+        price_per_1m_output=1.20,
+        temperature=1.0,
+    ),
+    "gpt-5-nano": ModelConfig(
+        name="GPT-5-Nano",
+        litellm_model="openai/gpt-5-nano",
+        provider=ModelProvider.OPENAI,
+        knowledge_cutoff="2025-08-01",
+        description="OpenAI GPT-5-Nano (smallest, most affordable)",
+        price_per_1m_input=0.10,
+        price_per_1m_output=0.40,
+        temperature=1.0,
+    ),
     # OpenAI - o1/o3 reasoning series
     "o1": ModelConfig(
         name="o1",
-        litellm_model="o1",
+        litellm_model="openai/o1",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2024-10-01",
         description="OpenAI o1 reasoning model",
@@ -177,7 +258,7 @@ MODELS = {
     ),
     "o1-mini": ModelConfig(
         name="o1-mini",
-        litellm_model="o1-mini",
+        litellm_model="openai/o1-mini",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2024-10-01",
         description="OpenAI o1-mini (faster reasoning)",
@@ -187,7 +268,7 @@ MODELS = {
     ),
     "o3-mini": ModelConfig(
         name="o3-mini",
-        litellm_model="o3-mini",
+        litellm_model="openai/o3-mini",
         provider=ModelProvider.OPENAI,
         knowledge_cutoff="2025-01-01",
         description="OpenAI o3-mini reasoning model",
@@ -200,7 +281,7 @@ MODELS = {
     # ==========================================================================
     "claude-opus-4.5": ModelConfig(
         name="Claude-Opus-4.5",
-        litellm_model="claude-opus-4-5-20241120",
+        litellm_model="anthropic/claude-opus-4-5-20251101",
         provider=ModelProvider.ANTHROPIC,
         knowledge_cutoff="2025-04-01",
         description="Anthropic Claude Opus 4.5 (Nov 2025)",
@@ -209,7 +290,7 @@ MODELS = {
     ),
     "claude-sonnet-4.5": ModelConfig(
         name="Claude-Sonnet-4.5",
-        litellm_model="claude-sonnet-4-5-20250929",
+        litellm_model="anthropic/claude-sonnet-4-5-20250929",
         provider=ModelProvider.ANTHROPIC,
         knowledge_cutoff="2025-04-01",
         description="Anthropic Claude Sonnet 4.5 (Sep 2025)",
@@ -226,14 +307,33 @@ MODELS = {
         price_per_1m_input=3.00,
         price_per_1m_output=15.00,
     ),
+     # Anthropic - Claude 3.5 series
+    "claude-4-sonnet": ModelConfig(
+        name="Claude-4-Sonnet",
+        litellm_model="anthropic/claude-sonnet-4-20250514",
+        provider=ModelProvider.ANTHROPIC,
+        knowledge_cutoff="2025-09-01",
+        description="Anthropic Claude 4.5 Sonnet (Sep 2025)",
+        price_per_1m_input=3.00,
+        price_per_1m_output=15.00,
+    ),
     "claude-3-5-haiku": ModelConfig(
         name="Claude-3.5-Haiku",
-        litellm_model="claude-3-5-haiku-latest",
+        litellm_model="anthropic/claude-3-5-haiku-20241022",
         provider=ModelProvider.ANTHROPIC,
         knowledge_cutoff="2024-04-01",
         description="Anthropic Claude 3.5 Haiku (fast)",
         price_per_1m_input=0.80,
         price_per_1m_output=4.00,
+    ),
+     "claude-4-5-haiku": ModelConfig(
+        name="Claude-4-5-Haiku",
+        litellm_model="anthropic/claude-haiku-4-5-20251001",
+        provider=ModelProvider.ANTHROPIC,
+        knowledge_cutoff="2025-10-01",
+        description="Anthropic Claude 4.5 Haiku (Oct 2025)",
+        price_per_1m_input=15.00,
+        price_per_1m_output=75.00,
     ),
     # ==========================================================================
     # Together AI - Qwen
@@ -264,6 +364,33 @@ MODELS = {
         description="Qwen QwQ 32B reasoning model via Together AI",
         price_per_1m_input=1.20,
         price_per_1m_output=1.20,
+    ),
+    "qwen3-235b": ModelConfig(
+        name="Qwen3-235B-Instruct",
+        litellm_model="together_ai/Qwen/Qwen3-235B-A22B-Instruct-2507",
+        provider=ModelProvider.TOGETHER,
+        knowledge_cutoff="2025-06-01",
+        description="Qwen 3 235B Instruct (22B active, direct responses)",
+        price_per_1m_input=2.00,
+        price_per_1m_output=2.00,
+    ),
+    "qwen3-235b-thinking": ModelConfig(
+        name="Qwen3-235B-Thinking",
+        litellm_model="together_ai/Qwen/Qwen3-235B-A22B-Thinking-2507",
+        provider=ModelProvider.TOGETHER,
+        knowledge_cutoff="2025-06-01",
+        description="Qwen 3 235B Thinking (22B active, reasoning mode)",
+        price_per_1m_input=2.00,
+        price_per_1m_output=2.00,
+    ),
+    "qwen3-32b": ModelConfig(
+        name="Qwen3-32B",
+        litellm_model="together_ai/Qwen/Qwen3-32B-Instruct",
+        provider=ModelProvider.TOGETHER,
+        knowledge_cutoff="2025-03-01",
+        description="Qwen 3 32B via Together AI",
+        price_per_1m_input=0.80,
+        price_per_1m_output=0.80,
     ),
     # ==========================================================================
     # Together AI - Llama
@@ -296,25 +423,60 @@ MODELS = {
         price_per_1m_output=0.18,
     ),
     # ==========================================================================
-    # Together AI - DeepSeek
+    # Fireworks AI - DeepSeek
     # ==========================================================================
     "deepseek-v3": ModelConfig(
         name="DeepSeek-V3",
-        litellm_model="together_ai/deepseek-ai/DeepSeek-V3",
-        provider=ModelProvider.TOGETHER,
+        litellm_model="fireworks_ai/accounts/fireworks/models/deepseek-v3",
+        provider=ModelProvider.FIREWORKS,
         knowledge_cutoff="2024-11-01",
-        description="DeepSeek V3 via Together AI",
+        description="DeepSeek V3 via Fireworks AI",
         price_per_1m_input=0.90,
         price_per_1m_output=0.90,
+        max_tokens=4096,
+    ),
+    "deepseek-v3.1": ModelConfig(
+        name="DeepSeek-V3.1",
+        litellm_model="fireworks_ai/accounts/fireworks/models/deepseek-v3p1-terminus",
+        provider=ModelProvider.FIREWORKS,
+        knowledge_cutoff="2025-06-01",
+        description="DeepSeek V3.1 via Fireworks AI",
+        price_per_1m_input=1.00,
+        price_per_1m_output=1.00,
+        max_tokens=4096,
+    ),
+    "deepseek-v3.2": ModelConfig(
+        name="DeepSeek-V3.2",
+        litellm_model="fireworks_ai/accounts/fireworks/models/deepseek-v3p2",
+        provider=ModelProvider.FIREWORKS,
+        knowledge_cutoff="2025-10-01",
+        description="DeepSeek V3.2 (GPT-5 level, 685B MoE) via Fireworks AI",
+        price_per_1m_input=1.20,
+        price_per_1m_output=1.20,
+        max_tokens=4096,
     ),
     "deepseek-r1": ModelConfig(
         name="DeepSeek-R1",
-        litellm_model="together_ai/deepseek-ai/DeepSeek-R1",
-        provider=ModelProvider.TOGETHER,
+        litellm_model="fireworks_ai/accounts/fireworks/models/deepseek-r1",
+        provider=ModelProvider.FIREWORKS,
         knowledge_cutoff="2024-11-01",
-        description="DeepSeek R1 reasoning model via Together AI",
+        description="DeepSeek R1 reasoning model via Fireworks AI",
         price_per_1m_input=3.00,
         price_per_1m_output=7.00,
+        max_tokens=4096,
+    ),
+    # ==========================================================================
+    # Fireworks AI - Kimi (Moonshot AI)
+    # ==========================================================================
+    "kimi-k2": ModelConfig(
+        name="Kimi-K2",
+        litellm_model="fireworks_ai/accounts/fireworks/models/kimi-k2-thinking",
+        provider=ModelProvider.FIREWORKS,
+        knowledge_cutoff="2025-06-01",
+        description="Kimi K2 (1T params, 32B active) via Fireworks AI",
+        price_per_1m_input=1.50,
+        price_per_1m_output=1.50,
+        max_tokens=4096,
     ),
     # ==========================================================================
     # Together AI - Mistral
@@ -331,6 +493,33 @@ MODELS = {
     # ==========================================================================
     # Google Gemini
     # ==========================================================================
+    "gemini-3-pro": ModelConfig(
+        name="Gemini-3-Pro",
+        litellm_model="gemini/gemini-3.0-pro",
+        provider=ModelProvider.GOOGLE,
+        knowledge_cutoff="2025-01-01",
+        description="Google Gemini 3 Pro (Nov 2025, latest flagship)",
+        price_per_1m_input=2.50,
+        price_per_1m_output=10.00,
+    ),
+    "gemini-3-flash": ModelConfig(
+        name="Gemini-3-Flash",
+        litellm_model="gemini/gemini-3.0-flash",
+        provider=ModelProvider.GOOGLE,
+        knowledge_cutoff="2025-01-01",
+        description="Google Gemini 3 Flash (Nov 2025, fast)",
+        price_per_1m_input=0.15,
+        price_per_1m_output=0.60,
+    ),
+    "gemini-2.5-pro": ModelConfig(
+        name="Gemini-2.5-Pro",
+        litellm_model="gemini/gemini-2.5-pro-preview-06-05",
+        provider=ModelProvider.GOOGLE,
+        knowledge_cutoff="2025-01-01",
+        description="Google Gemini 2.5 Pro",
+        price_per_1m_input=1.25,
+        price_per_1m_output=10.00,
+    ),
     "gemini-2.0-flash": ModelConfig(
         name="Gemini-2.0-Flash",
         litellm_model="gemini/gemini-2.0-flash-exp",
@@ -339,15 +528,6 @@ MODELS = {
         description="Google Gemini 2.0 Flash",
         price_per_1m_input=0.10,
         price_per_1m_output=0.40,
-    ),
-    "gemini-1.5-pro": ModelConfig(
-        name="Gemini-1.5-Pro",
-        litellm_model="gemini/gemini-1.5-pro",
-        provider=ModelProvider.GOOGLE,
-        knowledge_cutoff="2024-04-01",
-        description="Google Gemini 1.5 Pro",
-        price_per_1m_input=1.25,
-        price_per_1m_output=5.00,
     ),
 }
 
@@ -548,7 +728,7 @@ Be calibrated: if you're 70% confident, you should be correct about 70% of the t
         self.config = config
     
     def get_config(self) -> dict:
-        return asdict(self.config)
+        return self.config.model_dump(mode="json")
     
     def _format_prompt(self, question: MarketQuestion) -> str:
         return f"""Question: {question.question}
@@ -607,11 +787,13 @@ Based on the information provided, predict whether this will resolve to "yes" or
             {"role": "user", "content": self._format_prompt(question)},
         ]
         
+        # Call acompletion with optional reasoning_effort
         response = await acompletion(
             model=self.config.litellm_model,
             messages=messages,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
+            reasoning_effort=self.config.reasoning_effort,  # type: ignore[arg-type]
         )
         
         raw_output = response.choices[0].message.content
@@ -769,7 +951,7 @@ class KalshiDataLoader(BaseDataLoader):
         """Sample questions if we have more than num_samples."""
         if len(questions) > self.config.num_samples:
             np.random.seed(self.config.seed)
-            logger.info(f"🎲 Sampling {self.config.num_samples:,} questions from {len(questions):,}")
+            logger.info(f"🎲 Sampling {self.config.num_samples:,} questions from {len(questions):,} (seed={self.config.seed})")
             indices = np.random.choice(len(questions), self.config.num_samples, replace=False)
             questions = [questions[i] for i in indices]
         return questions
@@ -1533,6 +1715,7 @@ class KalshiBenchRunner:
         self.results: dict[str, EvaluationResult] = {}
         self.dataset_analysis: Optional[DatasetAnalysis] = None
         self.start_time = None
+        self.run_timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     def load_data(self):
         """Load benchmark data."""
@@ -1558,6 +1741,8 @@ class KalshiBenchRunner:
         logger.info(f"   Model ID:    {model_config.litellm_model}")
         logger.info(f"   Provider:    {model_config.provider.value}")
         logger.info(f"   Cutoff:      {model_config.knowledge_cutoff}")
+        if model_config.reasoning_effort:
+            logger.info(f"   Reasoning:   {model_config.reasoning_effort}")
         logger.info(f"   Questions:   {len(self.questions):,}")
         logger.info(f"   Concurrency: {self.config.max_concurrent}")
         
@@ -1645,9 +1830,80 @@ class KalshiBenchRunner:
         
         return result
     
-    async def run(self, model_keys: list[str]) -> dict[str, EvaluationResult]:
+    def _save_model_result(self, result: EvaluationResult):
+        """Save individual model result immediately after evaluation."""
+        os.makedirs(self.config.output_dir, exist_ok=True)
+        name = result.model_name
+        path = os.path.join(
+            self.config.output_dir, 
+            f"{name.lower().replace(' ', '_').replace('-', '_')}_{self.run_timestamp}.json"
+        )
+        with open(path, "w") as f:
+            json.dump(asdict(result), f, indent=2, default=str)
+        logger.info(f"💾 Saved: {path}")
+    
+    def load_existing_results(self) -> int:
+        """
+        Load existing model result files from the output directory.
+        Returns the number of results loaded.
+        """
+        import glob
+        
+        if not os.path.isdir(self.config.output_dir):
+            return 0
+        
+        # Find all JSON files that look like model results
+        pattern = os.path.join(self.config.output_dir, "*.json")
+        files = glob.glob(pattern)
+        
+        loaded = 0
+        for filepath in files:
+            filename = os.path.basename(filepath)
+            # Skip non-model result files
+            if any(x in filename for x in ['summary_', 'metadata_', 'dataset_analysis_', 'run_config']):
+                continue
+            
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                
+                # Check if it's a valid model result
+                if 'model_name' not in data or 'accuracy' not in data:
+                    continue
+                
+                # Convert dict back to EvaluationResult
+                # Handle the nested model_config which may have enum values
+                if 'model_config' in data and isinstance(data['model_config'], dict):
+                    if 'provider' in data['model_config']:
+                        # Convert string back to enum value for display purposes
+                        data['model_config']['provider'] = data['model_config']['provider']
+                
+                result = EvaluationResult(**data)
+                self.results[result.model_name] = result
+                logger.info(f"📂 Loaded existing result: {result.model_name} (from {filename})")
+                loaded += 1
+                
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logger.warning(f"⚠️  Could not load {filename}: {e}")
+                continue
+        
+        return loaded
+    
+    async def run(self, model_keys: list[str], load_existing: bool = False) -> dict[str, EvaluationResult]:
         """Run benchmark on specified models."""
         self.start_time = datetime.now()
+        
+        # Load existing results if requested
+        if load_existing:
+            logger.info("")
+            logger.info("=" * 60)
+            logger.info("📂 LOADING EXISTING RESULTS")
+            logger.info("=" * 60)
+            loaded_count = self.load_existing_results()
+            if loaded_count > 0:
+                logger.info(f"   Loaded {loaded_count} existing model results")
+            else:
+                logger.info("   No existing results found")
         
         # Compute knowledge cutoff from models if not explicitly set
         if self.config.knowledge_cutoff is None:
@@ -1671,20 +1927,29 @@ class KalshiBenchRunner:
         # Run dataset analysis
         self.analyze_dataset()
         
-        # Count valid models
+        # Determine which models need to be evaluated (skip those already loaded)
         valid_models = [key for key in model_keys if key in MODELS]
+        models_to_run = [key for key in valid_models if MODELS[key].name not in self.results]
+        models_skipped = [key for key in valid_models if MODELS[key].name in self.results]
+        
         logger.info("")
-        logger.info(f"🚀 Starting evaluation of {len(valid_models)} models")
-        logger.info(f"   Total predictions to make: {len(valid_models) * len(self.questions):,}")
+        if models_skipped:
+            logger.info(f"⏭️  Skipping {len(models_skipped)} models with existing results:")
+            for key in models_skipped:
+                logger.info(f"      {MODELS[key].name}")
         
-        for i, key in enumerate(model_keys, 1):
-            if key not in MODELS:
-                logger.warning(f"⚠️  Unknown model '{key}', skipping")
-                continue
+        if models_to_run:
+            logger.info(f"🚀 Starting evaluation of {len(models_to_run)} models")
+            logger.info(f"   Total predictions to make: {len(models_to_run) * len(self.questions):,}")
             
-            logger.info(f"\n[{i}/{len(valid_models)}] Starting {MODELS[key].name}...")
-            await self.evaluate_model(MODELS[key])
-        
+            for i, key in enumerate(models_to_run, 1):
+                logger.info(f"\n[{i}/{len(models_to_run)}] Starting {MODELS[key].name}...")
+                result = await self.evaluate_model(MODELS[key])
+                # Save individual result immediately after evaluation
+                self._save_model_result(result)
+        else:
+            logger.info("✅ All models have existing results, nothing to evaluate")
+            
         # Final summary
         elapsed = (datetime.now() - self.start_time).total_seconds()
         logger.info("")
@@ -1692,28 +1957,23 @@ class KalshiBenchRunner:
         logger.info("🏁 BENCHMARK COMPLETE")
         logger.info("=" * 60)
         logger.info(f"   Total time: {elapsed/60:.1f} minutes")
-        logger.info(f"   Models evaluated: {len(self.results)}")
+        logger.info(f"   Models in results: {len(self.results)} ({len(models_skipped)} loaded, {len(models_to_run)} evaluated)")
         logger.info(f"   Questions per model: {len(self.questions):,}")
         
         return self.results
     
     def save_results(self):
-        """Save all results to disk."""
+        """Save summary results to disk (individual model results already saved during evaluation)."""
         logger.info("")
         logger.info("=" * 60)
-        logger.info("💾 SAVING RESULTS")
+        logger.info("💾 SAVING SUMMARY RESULTS")
         logger.info("=" * 60)
         
         os.makedirs(self.config.output_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = self.run_timestamp  # Use consistent timestamp from run start
         
-        # 1. Save individual model results
-        logger.info("📄 Saving individual model results...")
-        for name, result in tqdm(self.results.items(), desc="Saving models", unit="model"):
-            path = os.path.join(self.config.output_dir, f"{name.lower().replace(' ', '_')}_{timestamp}.json")
-            with open(path, "w") as f:
-                json.dump(asdict(result), f, indent=2, default=str)
-            logger.debug(f"   Saved: {path}")
+        # Individual model results already saved during evaluation
+        logger.info(f"📄 Individual model results already saved ({len(self.results)} models)")
         
         # 2. Save comparison summary
         summary = self._generate_summary()
@@ -1923,7 +2183,7 @@ class KalshiBenchRunner:
 - Average confidence when correct vs wrong
 
 ### Models Evaluated
-{json.dumps([{"name": k, "provider": v["provider"]} for k, v in [(name, asdict(MODELS[name.lower().replace('-', '_').replace('.', '_').replace(' ', '-')])) for name in self.results.keys() if name.lower().replace('-', '_').replace('.', '_').replace(' ', '-') in MODELS] if v], indent=2)}
+{json.dumps([{"name": k, "provider": v["provider"]} for k, v in [(name, MODELS[name.lower().replace('-', '_').replace('.', '_').replace(' ', '-')].model_dump(mode="json")) for name in self.results.keys() if name.lower().replace('-', '_').replace('.', '_').replace(' ', '-') in MODELS] if v], indent=2, default=str)}
 
 Write a formal Methods section (3-4 paragraphs) suitable for NeurIPS covering:
 1. Benchmark construction and rationale (USE THE DATASET ANALYSIS STATS!)
@@ -2270,6 +2530,7 @@ Actual No  │   {cm['fp']:>4}   │   {cm['tn']:>4}   │
                 brier = f"{data['brier_score']:.4f}" if data['brier_score'] else "N/A"
                 cat_breakdown += f"| {cat} | {data['accuracy']:.2%} | {brier} | {data['count']} |\n"
             
+            reasoning_str = f"\n- **Reasoning Effort:** {result.model_config.get('reasoning_effort')}" if result.model_config.get('reasoning_effort') else ""
             model_details += f"""
 ---
 
@@ -2279,7 +2540,7 @@ Actual No  │   {cm['fp']:>4}   │   {cm['tn']:>4}   │
 - **Provider:** {result.model_config.get('provider', 'N/A')}
 - **Model ID:** {result.model_config.get('litellm_model', 'N/A')}
 - **Knowledge Cutoff:** {result.model_config.get('knowledge_cutoff', 'N/A')}
-- **Temperature:** {result.model_config.get('temperature', 'N/A')}
+- **Temperature:** {result.model_config.get('temperature', 'N/A')}{reasoning_str}
 
 ### All Metrics
 
@@ -2407,6 +2668,7 @@ KalshiBench evaluates language model forecasting ability and calibration using t
 | Models Evaluated | {len(self.results)} |
 | Date Range | {min(q.close_time for q in self.questions)} to {max(q.close_time for q in self.questions)} |
 | Yes Rate | {sum(1 for q in self.questions if q.ground_truth == "yes")/len(self.questions):.1%} |
+| Random Seed | {self.config.seed} |
 
 {dataset_section}
 
@@ -2500,12 +2762,17 @@ Dataset:
   Use --raw to load from raw dataset with on-the-fly deduplication.
 
 Available models:
-  OpenAI:    gpt-5.2, gpt-5.1, gpt-4o, gpt-4o-mini, o1, o1-mini, o3-mini
+  OpenAI:    gpt-5.2, gpt-5.2-low, gpt-5.2-high, gpt-5.2-xhigh,
+             gpt-5.1, gpt-5.1-medium, gpt-5.1-high,
+             gpt-5-mini, gpt-5-nano,
+             gpt-4o, gpt-4o-mini, o1, o1-mini, o3-mini
   Anthropic: claude-opus-4.5, claude-sonnet-4.5, claude-3-5-sonnet, claude-3-5-haiku
-  Google:    gemini-2.0-flash, gemini-1.5-pro
-  Together:  qwen-2.5-72b, qwen-2.5-7b, qwen-qwq-32b,
-             llama-3.3-70b, llama-3.1-405b, llama-3.1-8b,
-             deepseek-v3, deepseek-r1, mistral-large
+  Google:    gemini-3-pro, gemini-3-flash, gemini-2.5-pro, gemini-2.0-flash
+  Together:  qwen3-235b, qwen3-235b-thinking, qwen3-32b, qwen-2.5-72b, qwen-2.5-7b, qwen-qwq-32b,
+             llama-3.3-70b, llama-3.1-405b, llama-3.1-8b, mistral-large
+  Fireworks: deepseek-v3, deepseek-v3.1, deepseek-v3.2, deepseek-r1, kimi-k2
+
+Reasoning effort (GPT-5.x only): low, medium, high, xhigh (5.2 only)
 
 Note: Knowledge cutoff is automatically computed as the LATEST cutoff among
       all selected models, ensuring fair evaluation on unseen data.
@@ -2561,6 +2828,11 @@ Example:
         default=None,
         help="Override dataset name (default: 2084Collective/kalshibench-v2)",
     )
+    parser.add_argument(
+        "--load-existing",
+        action="store_true",
+        help="Load existing results from output directory (skip models already evaluated)",
+    )
     
     args = parser.parse_args()
     
@@ -2609,7 +2881,7 @@ Example:
     
     # Run benchmark
     runner = KalshiBenchRunner(config)
-    asyncio.run(runner.run(args.models))
+    asyncio.run(runner.run(args.models, load_existing=args.load_existing))
     
     # Save results
     print("\n" + "=" * 60)
