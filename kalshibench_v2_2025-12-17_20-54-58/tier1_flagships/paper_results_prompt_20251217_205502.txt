@@ -1,0 +1,908 @@
+You are a scientific writer preparing the Results section for a NeurIPS Datasets & Benchmarks paper on KalshiBench.
+
+## DATASET ANALYSIS (Critical for Paper)
+
+### Temporal Characteristics
+- Date Range: 2025-10-01T03:59:00Z to 2025-11-16T23:00:00Z
+- Temporal Span: 46 days
+- Time Horizon (days from cutoff to resolution):
+  - Mean: 34.0 days
+  - Median: 37.0 days
+  - Range: 2 - 46 days
+
+### Ground Truth Analysis
+- Overall Yes Rate: 40.0%
+- Yes: 120, No: 180
+- Ground Truth by Category:
+{
+  "Sports": {
+    "yes": 29,
+    "no": 54,
+    "total": 83,
+    "yes_rate": 0.3493975903614458
+  },
+  "Elections": {
+    "yes": 5,
+    "no": 19,
+    "total": 24,
+    "yes_rate": 0.20833333333333334
+  },
+  "Entertainment": {
+    "yes": 17,
+    "no": 30,
+    "total": 47,
+    "yes_rate": 0.3617021276595745
+  },
+  "Climate and Weather": {
+    "yes": 3,
+    "no": 6,
+    "total": 9,
+    "yes_rate": 0.3333333333333333
+  },
+  "Companies": {
+    "yes": 18,
+    "no": 12,
+    "total": 30,
+    "yes_rate": 0.6
+  },
+  "Mentions": {
+    "yes": 7,
+    "no": 12,
+    "total": 19,
+    "yes_rate": 0.3684210526315789
+  },
+  "Politics": {
+    "yes": 29,
+    "no": 26,
+    "total": 55,
+    "yes_rate": 0.5272727272727272
+  },
+  "Financials": {
+    "yes": 1,
+    "no": 7,
+    "total": 8,
+    "yes_rate": 0.125
+  },
+  "World": {
+    "yes": 3,
+    "no": 3,
+    "total": 6,
+    "yes_rate": 0.5
+  },
+  "Crypto": {
+    "yes": 3,
+    "no": 8,
+    "total": 11,
+    "yes_rate": 0.2727272727272727
+  },
+  "Social": {
+    "yes": 2,
+    "no": 1,
+    "total": 3,
+    "yes_rate": 0.6666666666666666
+  },
+  "Economics": {
+    "yes": 2,
+    "no": 2,
+    "total": 4,
+    "yes_rate": 0.5
+  },
+  "Science and Technology": {
+    "yes": 1,
+    "no": 0,
+    "total": 1,
+    "yes_rate": 1.0
+  }
+}
+
+### Category Distribution
+- Number of Categories: 13
+- Category Entropy: 3.01 bits (measures diversity)
+- Largest Category: Sports
+- Smallest Category: Science and Technology
+- Full Distribution:
+{
+  "Sports": 83,
+  "Politics": 55,
+  "Entertainment": 47,
+  "Companies": 30,
+  "Elections": 24,
+  "Mentions": 19,
+  "Crypto": 11,
+  "Climate and Weather": 9,
+  "Financials": 8,
+  "World": 6,
+  "Economics": 4,
+  "Social": 3,
+  "Science and Technology": 1
+}
+
+### Question Complexity
+- Question Length: mean=61, median=58, std=26 chars
+- Description Length: mean=442, median=406 chars
+- Vocabulary Size: 2,224 unique words
+- Avg Words per Question: 85.8
+
+
+## Evaluation Results
+
+### Model Performance Summary
+{
+  "Claude-Opus-4.5": {
+    "accuracy": 0.6933333333333334,
+    "macro_f1": 0.6756756756756757,
+    "brier_score": 0.2269326666666667,
+    "brier_skill_score": 0.057022946581097744,
+    "ece": 0.12013333333333336,
+    "mce": 0.2460000000000001,
+    "log_loss": 0.6613680820879295,
+    "overconfidence_rate_80": 0.23076923076923078,
+    "per_category": {
+      "Sports": {
+        "accuracy": 0.7590361445783133,
+        "brier_score": 0.1929578313253012,
+        "count": 83
+      },
+      "Elections": {
+        "accuracy": 0.75,
+        "brier_score": 0.17213749999999997,
+        "count": 24
+      },
+      "Entertainment": {
+        "accuracy": 0.7872340425531915,
+        "brier_score": 0.18658936170212767,
+        "count": 47
+      },
+      "Climate and Weather": {
+        "accuracy": 0.7777777777777778,
+        "brier_score": 0.2291333333333333,
+        "count": 9
+      },
+      "Companies": {
+        "accuracy": 0.6,
+        "brier_score": 0.2570366666666667,
+        "count": 30
+      },
+      "Mentions": {
+        "accuracy": 0.5263157894736842,
+        "brier_score": 0.3573105263157894,
+        "count": 19
+      },
+      "Politics": {
+        "accuracy": 0.6727272727272727,
+        "brier_score": 0.26934727272727266,
+        "count": 55
+      },
+      "Financials": {
+        "accuracy": 0.75,
+        "brier_score": 0.203175,
+        "count": 8
+      },
+      "World": {
+        "accuracy": 0.5,
+        "brier_score": 0.2620833333333334,
+        "count": 6
+      },
+      "Crypto": {
+        "accuracy": 0.36363636363636365,
+        "brier_score": 0.24043636363636364,
+        "count": 11
+      },
+      "Social": {
+        "accuracy": 1.0,
+        "brier_score": 0.010733333333333336,
+        "count": 3
+      },
+      "Economics": {
+        "accuracy": 0.5,
+        "brier_score": 0.325925,
+        "count": 4
+      },
+      "Science and Technology": {
+        "accuracy": 0.0,
+        "brier_score": 0.6084,
+        "count": 1
+      }
+    },
+    "reliability_diagram": [
+      {
+        "bin": "0.0-0.1",
+        "avg_confidence": 0.053611111111111116,
+        "avg_accuracy": 0.19444444444444445,
+        "count": 36
+      },
+      {
+        "bin": "0.1-0.2",
+        "avg_confidence": 0.15093750000000003,
+        "avg_accuracy": 0.1875,
+        "count": 32
+      },
+      {
+        "bin": "0.2-0.3",
+        "avg_confidence": 0.24785714285714291,
+        "avg_accuracy": 0.3333333333333333,
+        "count": 42
+      },
+      {
+        "bin": "0.3-0.4",
+        "avg_confidence": 0.35903225806451616,
+        "avg_accuracy": 0.3548387096774194,
+        "count": 31
+      },
+      {
+        "bin": "0.4-0.5",
+        "avg_confidence": 0.43944444444444447,
+        "avg_accuracy": 0.3333333333333333,
+        "count": 36
+      },
+      {
+        "bin": "0.5-0.6",
+        "avg_confidence": 0.5658823529411764,
+        "avg_accuracy": 0.35294117647058826,
+        "count": 34
+      },
+      {
+        "bin": "0.6-0.7",
+        "avg_confidence": 0.6413793103448275,
+        "avg_accuracy": 0.7241379310344828,
+        "count": 29
+      },
+      {
+        "bin": "0.7-0.8",
+        "avg_confidence": 0.7512500000000001,
+        "avg_accuracy": 0.5416666666666666,
+        "count": 24
+      },
+      {
+        "bin": "0.8-0.9",
+        "avg_confidence": 0.8543749999999999,
+        "avg_accuracy": 0.6875,
+        "count": 16
+      },
+      {
+        "bin": "0.9-1.0",
+        "avg_confidence": 0.9460000000000001,
+        "avg_accuracy": 0.7,
+        "count": 20
+      }
+    ]
+  },
+  "DeepSeek-V3.2": {
+    "accuracy": 0.6433333333333333,
+    "macro_f1": 0.6137695371250496,
+    "brier_score": 0.33859866666666666,
+    "brier_skill_score": -0.4069846253289626,
+    "ece": 0.2837999999999999,
+    "mce": 0.6297435897435896,
+    "log_loss": 1.0891496794220805,
+    "overconfidence_rate_80": 0.23595505617977527,
+    "per_category": {
+      "Sports": {
+        "accuracy": 0.6506024096385542,
+        "brier_score": 0.3502542168674698,
+        "count": 83
+      },
+      "Elections": {
+        "accuracy": 0.8333333333333334,
+        "brier_score": 0.36344166666666666,
+        "count": 24
+      },
+      "Entertainment": {
+        "accuracy": 0.7659574468085106,
+        "brier_score": 0.47612765957446807,
+        "count": 47
+      },
+      "Climate and Weather": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.3208222222222222,
+        "count": 9
+      },
+      "Companies": {
+        "accuracy": 0.6,
+        "brier_score": 0.2668333333333333,
+        "count": 30
+      },
+      "Mentions": {
+        "accuracy": 0.5263157894736842,
+        "brier_score": 0.30092105263157903,
+        "count": 19
+      },
+      "Politics": {
+        "accuracy": 0.5454545454545454,
+        "brier_score": 0.2679963636363636,
+        "count": 55
+      },
+      "Financials": {
+        "accuracy": 0.625,
+        "brier_score": 0.30125,
+        "count": 8
+      },
+      "World": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.2833333333333334,
+        "count": 6
+      },
+      "Crypto": {
+        "accuracy": 0.5454545454545454,
+        "brier_score": 0.32574545454545456,
+        "count": 11
+      },
+      "Social": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.32249999999999995,
+        "count": 3
+      },
+      "Economics": {
+        "accuracy": 0.5,
+        "brier_score": 0.27375,
+        "count": 4
+      },
+      "Science and Technology": {
+        "accuracy": 0.0,
+        "brier_score": 0.30250000000000005,
+        "count": 1
+      }
+    },
+    "reliability_diagram": [
+      {
+        "bin": "0.0-0.1",
+        "avg_confidence": 0.04800000000000003,
+        "avg_accuracy": 0.2,
+        "count": 10
+      },
+      {
+        "bin": "0.1-0.2",
+        "avg_confidence": 0.175,
+        "avg_accuracy": 0.25,
+        "count": 8
+      },
+      {
+        "bin": "0.2-0.3",
+        "avg_confidence": 0.25,
+        "avg_accuracy": 0.0,
+        "count": 4
+      },
+      {
+        "bin": "0.3-0.4",
+        "avg_confidence": 0.34444444444444444,
+        "avg_accuracy": 0.3333333333333333,
+        "count": 9
+      },
+      {
+        "bin": "0.4-0.5",
+        "avg_confidence": 0.41818181818181815,
+        "avg_accuracy": 0.5454545454545454,
+        "count": 11
+      },
+      {
+        "bin": "0.5-0.6",
+        "avg_confidence": 0.5753968253968252,
+        "avg_accuracy": 0.36507936507936506,
+        "count": 63
+      },
+      {
+        "bin": "0.6-0.7",
+        "avg_confidence": 0.6732835820895522,
+        "avg_accuracy": 0.4626865671641791,
+        "count": 67
+      },
+      {
+        "bin": "0.7-0.8",
+        "avg_confidence": 0.7473333333333334,
+        "avg_accuracy": 0.4,
+        "count": 30
+      },
+      {
+        "bin": "0.8-0.9",
+        "avg_confidence": 0.8306896551724137,
+        "avg_accuracy": 0.5172413793103449,
+        "count": 58
+      },
+      {
+        "bin": "0.9-1.0",
+        "avg_confidence": 0.9374358974358973,
+        "avg_accuracy": 0.3076923076923077,
+        "count": 39
+      }
+    ]
+  },
+  "GPT-5.2-XHigh": {
+    "accuracy": 0.6533333333333333,
+    "macro_f1": 0.5994865211810012,
+    "brier_score": 0.43289069333333335,
+    "brier_skill_score": -0.798797839235422,
+    "ece": 0.39472,
+    "mce": 0.6221730769230769,
+    "log_loss": 1.413262897012196,
+    "overconfidence_rate_80": 0.2827586206896552,
+    "per_category": {
+      "Sports": {
+        "accuracy": 0.7349397590361446,
+        "brier_score": 0.42093257831325304,
+        "count": 83
+      },
+      "Elections": {
+        "accuracy": 0.8333333333333334,
+        "brier_score": 0.694371,
+        "count": 24
+      },
+      "Entertainment": {
+        "accuracy": 0.6808510638297872,
+        "brier_score": 0.5435106382978724,
+        "count": 47
+      },
+      "Climate and Weather": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.44878888888888885,
+        "count": 9
+      },
+      "Companies": {
+        "accuracy": 0.6,
+        "brier_score": 0.30409666666666674,
+        "count": 30
+      },
+      "Mentions": {
+        "accuracy": 0.5789473684210527,
+        "brier_score": 0.42981052631578953,
+        "count": 19
+      },
+      "Politics": {
+        "accuracy": 0.6,
+        "brier_score": 0.3404290909090909,
+        "count": 55
+      },
+      "Financials": {
+        "accuracy": 0.5,
+        "brier_score": 0.41757500000000003,
+        "count": 8
+      },
+      "World": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.3748,
+        "count": 6
+      },
+      "Crypto": {
+        "accuracy": 0.36363636363636365,
+        "brier_score": 0.39157272727272735,
+        "count": 11
+      },
+      "Social": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.3561666666666667,
+        "count": 3
+      },
+      "Economics": {
+        "accuracy": 0.25,
+        "brier_score": 0.41004999999999997,
+        "count": 4
+      },
+      "Science and Technology": {
+        "accuracy": 0.0,
+        "brier_score": 0.0625,
+        "count": 1
+      }
+    },
+    "reliability_diagram": [
+      {
+        "bin": "0.0-0.1",
+        "avg_confidence": 0.030000000000000027,
+        "avg_accuracy": 0.0,
+        "count": 1
+      },
+      {
+        "bin": "0.5-0.6",
+        "avg_confidence": 0.5726190476190476,
+        "avg_accuracy": 0.42857142857142855,
+        "count": 42
+      },
+      {
+        "bin": "0.6-0.7",
+        "avg_confidence": 0.6609999999999999,
+        "avg_accuracy": 0.48,
+        "count": 50
+      },
+      {
+        "bin": "0.7-0.8",
+        "avg_confidence": 0.7509756097560975,
+        "avg_accuracy": 0.4878048780487805,
+        "count": 41
+      },
+      {
+        "bin": "0.8-0.9",
+        "avg_confidence": 0.8353225806451614,
+        "avg_accuracy": 0.3870967741935484,
+        "count": 62
+      },
+      {
+        "bin": "0.9-1.0",
+        "avg_confidence": 0.9587115384615384,
+        "avg_accuracy": 0.33653846153846156,
+        "count": 104
+      }
+    ]
+  },
+  "Qwen3-235B-Thinking": {
+    "accuracy": 0.6566666666666666,
+    "macro_f1": 0.6066249952260315,
+    "brier_score": 0.3458623333333333,
+    "brier_skill_score": -0.4371674592548134,
+    "ece": 0.29663333333333325,
+    "mce": 0.4789743589743589,
+    "log_loss": 1.2726360810265291,
+    "overconfidence_rate_80": 0.32558139534883723,
+    "per_category": {
+      "Sports": {
+        "accuracy": 0.7228915662650602,
+        "brier_score": 0.3490228915662651,
+        "count": 83
+      },
+      "Elections": {
+        "accuracy": 0.7916666666666666,
+        "brier_score": 0.27524583333333336,
+        "count": 24
+      },
+      "Entertainment": {
+        "accuracy": 0.6808510638297872,
+        "brier_score": 0.3540191489361702,
+        "count": 47
+      },
+      "Climate and Weather": {
+        "accuracy": 0.5555555555555556,
+        "brier_score": 0.2997,
+        "count": 9
+      },
+      "Companies": {
+        "accuracy": 0.6333333333333333,
+        "brier_score": 0.3481400000000001,
+        "count": 30
+      },
+      "Mentions": {
+        "accuracy": 0.631578947368421,
+        "brier_score": 0.4351736842105263,
+        "count": 19
+      },
+      "Politics": {
+        "accuracy": 0.5818181818181818,
+        "brier_score": 0.35303636363636365,
+        "count": 55
+      },
+      "Financials": {
+        "accuracy": 0.625,
+        "brier_score": 0.32722500000000004,
+        "count": 8
+      },
+      "World": {
+        "accuracy": 0.5,
+        "brier_score": 0.35379999999999995,
+        "count": 6
+      },
+      "Crypto": {
+        "accuracy": 0.6363636363636364,
+        "brier_score": 0.2471181818181818,
+        "count": 11
+      },
+      "Social": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.09630000000000001,
+        "count": 3
+      },
+      "Economics": {
+        "accuracy": 0.25,
+        "brier_score": 0.561975,
+        "count": 4
+      },
+      "Science and Technology": {
+        "accuracy": 0.0,
+        "brier_score": 0.7224999999999999,
+        "count": 1
+      }
+    },
+    "reliability_diagram": [
+      {
+        "bin": "0.0-0.1",
+        "avg_confidence": 0.0393150684931507,
+        "avg_accuracy": 0.3561643835616438,
+        "count": 73
+      },
+      {
+        "bin": "0.1-0.2",
+        "avg_confidence": 0.15263157894736842,
+        "avg_accuracy": 0.3157894736842105,
+        "count": 19
+      },
+      {
+        "bin": "0.2-0.3",
+        "avg_confidence": 0.262,
+        "avg_accuracy": 0.4,
+        "count": 5
+      },
+      {
+        "bin": "0.3-0.4",
+        "avg_confidence": 0.3407142857142857,
+        "avg_accuracy": 0.35714285714285715,
+        "count": 14
+      },
+      {
+        "bin": "0.4-0.5",
+        "avg_confidence": 0.44166666666666665,
+        "avg_accuracy": 0.5,
+        "count": 6
+      },
+      {
+        "bin": "0.5-0.6",
+        "avg_confidence": 0.5559090909090908,
+        "avg_accuracy": 0.45454545454545453,
+        "count": 22
+      },
+      {
+        "bin": "0.6-0.7",
+        "avg_confidence": 0.6639024390243902,
+        "avg_accuracy": 0.43902439024390244,
+        "count": 41
+      },
+      {
+        "bin": "0.7-0.8",
+        "avg_confidence": 0.7558620689655173,
+        "avg_accuracy": 0.3103448275862069,
+        "count": 29
+      },
+      {
+        "bin": "0.8-0.9",
+        "avg_confidence": 0.8457142857142856,
+        "avg_accuracy": 0.46938775510204084,
+        "count": 49
+      },
+      {
+        "bin": "0.9-1.0",
+        "avg_confidence": 0.9405128205128205,
+        "avg_accuracy": 0.46153846153846156,
+        "count": 39
+      }
+    ]
+  },
+  "Kimi-K2": {
+    "accuracy": 0.6712328767123288,
+    "macro_f1": 0.63322342596954,
+    "brier_score": 0.3472582191780822,
+    "brier_skill_score": -0.44608668131868146,
+    "ece": 0.2980821917808219,
+    "mce": 0.5704918032786885,
+    "log_loss": 1.0834571574878558,
+    "overconfidence_rate_80": 0.2986111111111111,
+    "per_category": {
+      "Sports": {
+        "accuracy": 0.75,
+        "brier_score": 0.3103025,
+        "count": 80
+      },
+      "Elections": {
+        "accuracy": 0.9565217391304348,
+        "brier_score": 0.36981739130434776,
+        "count": 23
+      },
+      "Entertainment": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.42334,
+        "count": 45
+      },
+      "Climate and Weather": {
+        "accuracy": 0.6666666666666666,
+        "brier_score": 0.3135222222222222,
+        "count": 9
+      },
+      "Companies": {
+        "accuracy": 0.6333333333333333,
+        "brier_score": 0.30490333333333336,
+        "count": 30
+      },
+      "Mentions": {
+        "accuracy": 0.631578947368421,
+        "brier_score": 0.4462315789473685,
+        "count": 19
+      },
+      "Politics": {
+        "accuracy": 0.5555555555555556,
+        "brier_score": 0.31982037037037037,
+        "count": 54
+      },
+      "Financials": {
+        "accuracy": 0.625,
+        "brier_score": 0.41308750000000005,
+        "count": 8
+      },
+      "World": {
+        "accuracy": 0.5,
+        "brier_score": 0.3467833333333334,
+        "count": 6
+      },
+      "Crypto": {
+        "accuracy": 0.6,
+        "brier_score": 0.28367,
+        "count": 10
+      },
+      "Social": {
+        "accuracy": 0.3333333333333333,
+        "brier_score": 0.4237666666666666,
+        "count": 3
+      },
+      "Economics": {
+        "accuracy": 0.5,
+        "brier_score": 0.32954999999999995,
+        "count": 4
+      },
+      "Science and Technology": {
+        "accuracy": 0.0,
+        "brier_score": 0.48999999999999994,
+        "count": 1
+      }
+    },
+    "reliability_diagram": [
+      {
+        "bin": "0.0-0.1",
+        "avg_confidence": 0.04710526315789475,
+        "avg_accuracy": 0.2631578947368421,
+        "count": 38
+      },
+      {
+        "bin": "0.1-0.2",
+        "avg_confidence": 0.140625,
+        "avg_accuracy": 0.3125,
+        "count": 16
+      },
+      {
+        "bin": "0.2-0.3",
+        "avg_confidence": 0.2488888888888889,
+        "avg_accuracy": 0.1111111111111111,
+        "count": 9
+      },
+      {
+        "bin": "0.3-0.4",
+        "avg_confidence": 0.314,
+        "avg_accuracy": 0.6,
+        "count": 5
+      },
+      {
+        "bin": "0.4-0.5",
+        "avg_confidence": 0.46499999999999997,
+        "avg_accuracy": 0.0,
+        "count": 2
+      },
+      {
+        "bin": "0.5-0.6",
+        "avg_confidence": 0.5702272727272727,
+        "avg_accuracy": 0.4772727272727273,
+        "count": 44
+      },
+      {
+        "bin": "0.6-0.7",
+        "avg_confidence": 0.668125,
+        "avg_accuracy": 0.4583333333333333,
+        "count": 48
+      },
+      {
+        "bin": "0.7-0.8",
+        "avg_confidence": 0.7496774193548387,
+        "avg_accuracy": 0.4838709677419355,
+        "count": 31
+      },
+      {
+        "bin": "0.8-0.9",
+        "avg_confidence": 0.8494736842105265,
+        "avg_accuracy": 0.4473684210526316,
+        "count": 38
+      },
+      {
+        "bin": "0.9-1.0",
+        "avg_confidence": 0.9475409836065574,
+        "avg_accuracy": 0.3770491803278688,
+        "count": 61
+      }
+    ]
+  }
+}
+
+### Leaderboards
+{
+  "by_accuracy": [
+    {
+      "model": "Claude-Opus-4.5",
+      "accuracy": 0.6933333333333334
+    },
+    {
+      "model": "Kimi-K2",
+      "accuracy": 0.6712328767123288
+    },
+    {
+      "model": "Qwen3-235B-Thinking",
+      "accuracy": 0.6566666666666666
+    },
+    {
+      "model": "GPT-5.2-XHigh",
+      "accuracy": 0.6533333333333333
+    },
+    {
+      "model": "DeepSeek-V3.2",
+      "accuracy": 0.6433333333333333
+    }
+  ],
+  "by_brier_score": [
+    {
+      "model": "Claude-Opus-4.5",
+      "brier_score": 0.2269326666666667
+    },
+    {
+      "model": "DeepSeek-V3.2",
+      "brier_score": 0.33859866666666666
+    },
+    {
+      "model": "Qwen3-235B-Thinking",
+      "brier_score": 0.3458623333333333
+    },
+    {
+      "model": "Kimi-K2",
+      "brier_score": 0.3472582191780822
+    },
+    {
+      "model": "GPT-5.2-XHigh",
+      "brier_score": 0.43289069333333335
+    }
+  ],
+  "by_calibration": [
+    {
+      "model": "Claude-Opus-4.5",
+      "ece": 0.12013333333333336
+    },
+    {
+      "model": "DeepSeek-V3.2",
+      "ece": 0.2837999999999999
+    },
+    {
+      "model": "Qwen3-235B-Thinking",
+      "ece": 0.29663333333333325
+    },
+    {
+      "model": "Kimi-K2",
+      "ece": 0.2980821917808219
+    },
+    {
+      "model": "GPT-5.2-XHigh",
+      "ece": 0.39472
+    }
+  ]
+}
+
+## Writing Instructions
+
+Structure the Results section as follows:
+
+**Paragraph 1: Main Forecasting Performance**
+- Report accuracy and F1 across all models
+- Identify best and worst performers
+- Note any surprising results (e.g., smaller models outperforming larger ones)
+- Highlight any model family patterns (e.g., reasoning models vs standard models)
+
+**Paragraph 2: Calibration Analysis (KEY CONTRIBUTION)**
+- This is the main contribution of KalshiBench
+- Compare Brier Scores across models (THE key metric for forecasting)
+- Discuss ECE - which models are best calibrated?
+- Analyze gap between accuracy and calibration (a model can be accurate but poorly calibrated)
+- Compare Brier Skill Score to show improvement over naive baseline
+
+**Paragraph 3: Overconfidence Analysis**
+- Report overconfidence rates at 80% threshold
+- Which models are most/least overconfident?
+- Discuss implications for real-world deployment
+- Do reasoning models (o1, DeepSeek-R1, QwQ) show better calibration?
+
+**Paragraph 4: Category Breakdown**
+- Are there categories where models struggle?
+- Do different models have different strengths?
+- Which categories show best/worst calibration?
+
+**Paragraph 5: Key Findings**
+- Summarize main takeaways
+- What does this reveal about current LLM forecasting capabilities?
+- Implications for using LLMs for forecasting tasks
+- Recommendations for model selection based on calibration needs
+
+Use precise numbers, scientific language, and draw meaningful conclusions. Create 1-2 tables summarizing key results.

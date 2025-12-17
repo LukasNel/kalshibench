@@ -1,0 +1,156 @@
+{
+  "total_questions": 300,
+  "knowledge_cutoff": "2025-10-01",
+  "date_range": {
+    "earliest": "2025-10-01T03:59:00Z",
+    "latest": "2025-11-16T23:00:00Z",
+    "span_days": 46
+  },
+  "temporal_distribution": {
+    "2025-10": 85,
+    "2025-11": 215
+  },
+  "time_horizon_stats": {
+    "mean_days_ahead": 33.96928327645051,
+    "median_days_ahead": 37.0,
+    "std_days_ahead": 11.336118776111276,
+    "min_days_ahead": 2,
+    "max_days_ahead": 46
+  },
+  "ground_truth_distribution": {
+    "yes": 120,
+    "no": 180,
+    "yes_rate": 0.4
+  },
+  "ground_truth_by_category": {
+    "Sports": {
+      "yes": 29,
+      "no": 54,
+      "total": 83,
+      "yes_rate": 0.3493975903614458
+    },
+    "Elections": {
+      "yes": 5,
+      "no": 19,
+      "total": 24,
+      "yes_rate": 0.20833333333333334
+    },
+    "Entertainment": {
+      "yes": 17,
+      "no": 30,
+      "total": 47,
+      "yes_rate": 0.3617021276595745
+    },
+    "Climate and Weather": {
+      "yes": 3,
+      "no": 6,
+      "total": 9,
+      "yes_rate": 0.3333333333333333
+    },
+    "Companies": {
+      "yes": 18,
+      "no": 12,
+      "total": 30,
+      "yes_rate": 0.6
+    },
+    "Mentions": {
+      "yes": 7,
+      "no": 12,
+      "total": 19,
+      "yes_rate": 0.3684210526315789
+    },
+    "Politics": {
+      "yes": 29,
+      "no": 26,
+      "total": 55,
+      "yes_rate": 0.5272727272727272
+    },
+    "Financials": {
+      "yes": 1,
+      "no": 7,
+      "total": 8,
+      "yes_rate": 0.125
+    },
+    "World": {
+      "yes": 3,
+      "no": 3,
+      "total": 6,
+      "yes_rate": 0.5
+    },
+    "Crypto": {
+      "yes": 3,
+      "no": 8,
+      "total": 11,
+      "yes_rate": 0.2727272727272727
+    },
+    "Social": {
+      "yes": 2,
+      "no": 1,
+      "total": 3,
+      "yes_rate": 0.6666666666666666
+    },
+    "Economics": {
+      "yes": 2,
+      "no": 2,
+      "total": 4,
+      "yes_rate": 0.5
+    },
+    "Science and Technology": {
+      "yes": 1,
+      "no": 0,
+      "total": 1,
+      "yes_rate": 1.0
+    }
+  },
+  "ground_truth_by_month": {
+    "2025-10": {
+      "yes_rate": 0.5647058823529412,
+      "total": 85
+    },
+    "2025-11": {
+      "yes_rate": 0.33488372093023255,
+      "total": 215
+    }
+  },
+  "category_distribution": {
+    "Sports": 83,
+    "Politics": 55,
+    "Entertainment": 47,
+    "Companies": 30,
+    "Elections": 24,
+    "Mentions": 19,
+    "Crypto": 11,
+    "Climate and Weather": 9,
+    "Financials": 8,
+    "World": 6,
+    "Economics": 4,
+    "Social": 3,
+    "Science and Technology": 1
+  },
+  "category_entropy": 3.0122423270293046,
+  "num_categories": 13,
+  "largest_category": "Sports",
+  "smallest_category": "Science and Technology",
+  "question_length_stats": {
+    "mean": 60.66,
+    "median": 58.0,
+    "std": 26.240891753139795,
+    "min": 19,
+    "max": 288
+  },
+  "description_length_stats": {
+    "mean": 442.19,
+    "median": 405.5,
+    "std": 321.37673723114017,
+    "min": 77,
+    "max": 1488
+  },
+  "total_vocabulary_size": 2224,
+  "avg_words_per_question": 85.8,
+  "market_coverage": 0.0,
+  "market_calibration": null,
+  "market_reliability_diagram": [],
+  "market_uncertainty_distribution": null,
+  "high_confidence_market_accuracy": null,
+  "uncertain_market_accuracy": null
+}

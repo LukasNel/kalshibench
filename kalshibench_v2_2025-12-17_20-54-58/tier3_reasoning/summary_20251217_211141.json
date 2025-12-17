@@ -1,0 +1,137 @@
+{
+  "benchmark": "KalshiBench",
+  "timestamp": "2025-12-17T21:11:47.326955",
+  "knowledge_cutoff_used": "2025-10-01",
+  "num_models": 4,
+  "num_samples": 300,
+  "models": {
+    "GPT-5.1-High": {
+      "knowledge_cutoff": "2025-08-01",
+      "accuracy": 0.6466666666666666,
+      "macro_f1": 0.5940563725490196,
+      "brier_score": 0.3221306666666667,
+      "brier_skill_score": -0.33855487326284694,
+      "ece": 0.256,
+      "mce": 0.6434883720930233,
+      "log_loss": 1.0162167935105546,
+      "avg_confidence": 0.7993333333333333,
+      "overconfidence_rate_80": 0.271523178807947,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 91518.90054666667,
+      "total_input_tokens": 79132,
+      "total_output_tokens": 1319060,
+      "total_tokens": 1398192,
+      "total_cost_usd": 16.1452
+    },
+    "GPT-5.2": {
+      "knowledge_cutoff": "2025-10-01",
+      "accuracy": 0.67,
+      "macro_f1": 0.6198108014695529,
+      "brier_score": 0.34222801333333336,
+      "brier_skill_score": -0.42206570940486654,
+      "ece": 0.29812666666666665,
+      "mce": 0.5067924528301887,
+      "log_loss": 1.0318174982718396,
+      "avg_confidence": 0.7799933333333333,
+      "overconfidence_rate_80": 0.31297709923664124,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 9461.89267,
+      "total_input_tokens": 79132,
+      "total_output_tokens": 129926,
+      "total_tokens": 209058,
+      "total_cost_usd": 2.3446
+    },
+    "GPT-5.2-High": {
+      "knowledge_cutoff": "2025-10-01",
+      "accuracy": 0.65,
+      "macro_f1": 0.59898664561877,
+      "brier_score": 0.371823,
+      "brier_skill_score": -0.5450422457177158,
+      "ece": 0.32563333333333333,
+      "mce": 0.595,
+      "log_loss": 1.1325701369898664,
+      "avg_confidence": 0.7791,
+      "overconfidence_rate_80": 0.2857142857142857,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 14062.821539999997,
+      "total_input_tokens": 79132,
+      "total_output_tokens": 195922,
+      "total_tokens": 275054,
+      "total_cost_usd": 3.3345
+    },
+    "o1": {
+      "knowledge_cutoff": "2024-10-01",
+      "accuracy": 0.65,
+      "macro_f1": 0.60525821125578,
+      "brier_score": 0.2822883333333333,
+      "brier_skill_score": -0.17299736829955203,
+      "ece": 0.1764333333333333,
+      "mce": 0.5148387096774192,
+      "log_loss": 0.8394532542154081,
+      "avg_confidence": 0.7630333333333332,
+      "overconfidence_rate_80": 0.2631578947368421,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 7157.687166666667,
+      "total_input_tokens": 79132,
+      "total_output_tokens": 246181,
+      "total_tokens": 325313,
+      "total_cost_usd": 15.9578
+    }
+  },
+  "leaderboard": {
+    "by_accuracy": [
+      {
+        "model": "GPT-5.2",
+        "accuracy": 0.67
+      },
+      {
+        "model": "GPT-5.2-High",
+        "accuracy": 0.65
+      },
+      {
+        "model": "o1",
+        "accuracy": 0.65
+      },
+      {
+        "model": "GPT-5.1-High",
+        "accuracy": 0.6466666666666666
+      }
+    ],
+    "by_brier_score": [
+      {
+        "model": "o1",
+        "brier_score": 0.2822883333333333
+      },
+      {
+        "model": "GPT-5.1-High",
+        "brier_score": 0.3221306666666667
+      },
+      {
+        "model": "GPT-5.2",
+        "brier_score": 0.34222801333333336
+      },
+      {
+        "model": "GPT-5.2-High",
+        "brier_score": 0.371823
+      }
+    ],
+    "by_calibration": [
+      {
+        "model": "o1",
+        "ece": 0.1764333333333333
+      },
+      {
+        "model": "GPT-5.1-High",
+        "ece": 0.256
+      },
+      {
+        "model": "GPT-5.2",
+        "ece": 0.29812666666666665
+      },
+      {
+        "model": "GPT-5.2-High",
+        "ece": 0.32563333333333333
+      }
+    ]
+  }
+}

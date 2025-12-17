@@ -1,0 +1,167 @@
+{
+  "benchmark": "KalshiBench",
+  "timestamp": "2025-12-17T21:11:31.737199",
+  "knowledge_cutoff_used": "2025-10-01",
+  "num_models": 5,
+  "num_samples": 300,
+  "models": {
+    "Claude-Opus-4.5": {
+      "knowledge_cutoff": "2025-04-01",
+      "accuracy": 0.6933333333333334,
+      "macro_f1": 0.6756756756756757,
+      "brier_score": 0.2269326666666667,
+      "brier_skill_score": 0.057022946581097744,
+      "ece": 0.12013333333333336,
+      "mce": 0.2460000000000001,
+      "log_loss": 0.6613680820879295,
+      "avg_confidence": 0.7377999999999999,
+      "overconfidence_rate_80": 0.23076923076923078,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 11784.278493333335,
+      "total_input_tokens": 86070,
+      "total_output_tokens": 137901,
+      "total_tokens": 223971,
+      "total_cost_usd": 11.6336
+    },
+    "DeepSeek-V3.2": {
+      "knowledge_cutoff": "2025-10-01",
+      "accuracy": 0.6433333333333333,
+      "macro_f1": 0.6137695371250496,
+      "brier_score": 0.33859866666666666,
+      "brier_skill_score": -0.4069846253289626,
+      "ece": 0.2837999999999999,
+      "mce": 0.6297435897435896,
+      "log_loss": 1.0891496794220805,
+      "avg_confidence": 0.7364666666666667,
+      "overconfidence_rate_80": 0.23595505617977527,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 7946.728706666666,
+      "total_input_tokens": 77317,
+      "total_output_tokens": 226736,
+      "total_tokens": 304053,
+      "total_cost_usd": 0.3649
+    },
+    "GPT-5.2-XHigh": {
+      "knowledge_cutoff": "2025-10-01",
+      "accuracy": 0.6533333333333333,
+      "macro_f1": 0.5994865211810012,
+      "brier_score": 0.43289069333333335,
+      "brier_skill_score": -0.798797839235422,
+      "ece": 0.39472,
+      "mce": 0.6221730769230769,
+      "log_loss": 1.413262897012196,
+      "avg_confidence": 0.8011866666666666,
+      "overconfidence_rate_80": 0.2827586206896552,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 135725.94116333337,
+      "total_input_tokens": 79132,
+      "total_output_tokens": 1994703,
+      "total_tokens": 2073835,
+      "total_cost_usd": 30.3162
+    },
+    "Qwen3-235B-Thinking": {
+      "knowledge_cutoff": "2025-06-01",
+      "accuracy": 0.6566666666666666,
+      "macro_f1": 0.6066249952260315,
+      "brier_score": 0.3458623333333333,
+      "brier_skill_score": -0.4371674592548134,
+      "ece": 0.29663333333333325,
+      "mce": 0.4789743589743589,
+      "log_loss": 1.2726360810265291,
+      "avg_confidence": 0.8166333333333333,
+      "overconfidence_rate_80": 0.32558139534883723,
+      "parse_rate": 1.0,
+      "avg_latency_ms": 25397.508956666665,
+      "total_input_tokens": 83267,
+      "total_output_tokens": 510814,
+      "total_tokens": 594081,
+      "total_cost_usd": 1.1882
+    },
+    "Kimi-K2": {
+      "knowledge_cutoff": "2025-06-01",
+      "accuracy": 0.6712328767123288,
+      "macro_f1": 0.63322342596954,
+      "brier_score": 0.3472582191780822,
+      "brier_skill_score": -0.44608668131868146,
+      "ece": 0.2980821917808219,
+      "mce": 0.5704918032786885,
+      "log_loss": 1.0834571574878558,
+      "avg_confidence": 0.7934931506849314,
+      "overconfidence_rate_80": 0.2986111111111111,
+      "parse_rate": 0.9733333333333334,
+      "avg_latency_ms": 16206.021659999999,
+      "total_input_tokens": 79112,
+      "total_output_tokens": 544743,
+      "total_tokens": 623855,
+      "total_cost_usd": 0.9358
+    }
+  },
+  "leaderboard": {
+    "by_accuracy": [
+      {
+        "model": "Claude-Opus-4.5",
+        "accuracy": 0.6933333333333334
+      },
+      {
+        "model": "Kimi-K2",
+        "accuracy": 0.6712328767123288
+      },
+      {
+        "model": "Qwen3-235B-Thinking",
+        "accuracy": 0.6566666666666666
+      },
+      {
+        "model": "GPT-5.2-XHigh",
+        "accuracy": 0.6533333333333333
+      },
+      {
+        "model": "DeepSeek-V3.2",
+        "accuracy": 0.6433333333333333
+      }
+    ],
+    "by_brier_score": [
+      {
+        "model": "Claude-Opus-4.5",
+        "brier_score": 0.2269326666666667
+      },
+      {
+        "model": "DeepSeek-V3.2",
+        "brier_score": 0.33859866666666666
+      },
+      {
+        "model": "Qwen3-235B-Thinking",
+        "brier_score": 0.3458623333333333
+      },
+      {
+        "model": "Kimi-K2",
+        "brier_score": 0.3472582191780822
+      },
+      {
+        "model": "GPT-5.2-XHigh",
+        "brier_score": 0.43289069333333335
+      }
+    ],
+    "by_calibration": [
+      {
+        "model": "Claude-Opus-4.5",
+        "ece": 0.12013333333333336
+      },
+      {
+        "model": "DeepSeek-V3.2",
+        "ece": 0.2837999999999999
+      },
+      {
+        "model": "Qwen3-235B-Thinking",
+        "ece": 0.29663333333333325
+      },
+      {
+        "model": "Kimi-K2",
+        "ece": 0.2980821917808219
+      },
+      {
+        "model": "GPT-5.2-XHigh",
+        "ece": 0.39472
+      }
+    ]
+  }
+}

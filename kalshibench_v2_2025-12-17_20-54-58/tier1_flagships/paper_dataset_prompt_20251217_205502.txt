@@ -1,0 +1,180 @@
+You are a scientific writer preparing the Dataset section for a NeurIPS Datasets & Benchmarks paper.
+
+## Dataset: KalshiBench
+
+### What is KalshiBench?
+
+KalshiBench is a benchmark for evaluating LLM forecasting calibration using real-world prediction markets from Kalshi, a CFTC-regulated prediction market platform. Unlike traditional benchmarks that measure accuracy on static knowledge, KalshiBench evaluates whether models can make well-calibrated probabilistic predictions on questions with verifiable real-world outcomes.
+
+**Key Innovation:** By using temporally-filtered prediction market questions, we ensure models cannot have memorized the answers during training—the questions resolve AFTER the models' knowledge cutoffs.
+
+### Overview Statistics
+- Total Questions: 300
+- Knowledge Cutoff: 2025-10-01
+- Source: Kalshi (CFTC-regulated prediction market)
+
+### Temporal Characteristics
+- Date Range: 2025-10-01T03:59:00Z to 2025-11-16T23:00:00Z
+- Temporal Span: 46 days
+- Mean Time Horizon: 34.0 days (from cutoff to resolution)
+- Median Time Horizon: 37.0 days
+- Time Horizon Range: 2 - 46 days
+
+### Label Distribution Analysis
+- Yes Rate: 40.0%
+- Yes Count: 120
+- No Count: 180
+- Imbalance Ratio: 1.50:1
+
+### Ground Truth by Category (potential biases!)
+{
+  "Sports": {
+    "yes": 29,
+    "no": 54,
+    "total": 83,
+    "yes_rate": 0.3493975903614458
+  },
+  "Elections": {
+    "yes": 5,
+    "no": 19,
+    "total": 24,
+    "yes_rate": 0.20833333333333334
+  },
+  "Entertainment": {
+    "yes": 17,
+    "no": 30,
+    "total": 47,
+    "yes_rate": 0.3617021276595745
+  },
+  "Climate and Weather": {
+    "yes": 3,
+    "no": 6,
+    "total": 9,
+    "yes_rate": 0.3333333333333333
+  },
+  "Companies": {
+    "yes": 18,
+    "no": 12,
+    "total": 30,
+    "yes_rate": 0.6
+  },
+  "Mentions": {
+    "yes": 7,
+    "no": 12,
+    "total": 19,
+    "yes_rate": 0.3684210526315789
+  },
+  "Politics": {
+    "yes": 29,
+    "no": 26,
+    "total": 55,
+    "yes_rate": 0.5272727272727272
+  },
+  "Financials": {
+    "yes": 1,
+    "no": 7,
+    "total": 8,
+    "yes_rate": 0.125
+  },
+  "World": {
+    "yes": 3,
+    "no": 3,
+    "total": 6,
+    "yes_rate": 0.5
+  },
+  "Crypto": {
+    "yes": 3,
+    "no": 8,
+    "total": 11,
+    "yes_rate": 0.2727272727272727
+  },
+  "Social": {
+    "yes": 2,
+    "no": 1,
+    "total": 3,
+    "yes_rate": 0.6666666666666666
+  },
+  "Economics": {
+    "yes": 2,
+    "no": 2,
+    "total": 4,
+    "yes_rate": 0.5
+  },
+  "Science and Technology": {
+    "yes": 1,
+    "no": 0,
+    "total": 1,
+    "yes_rate": 1.0
+  }
+}
+
+### Ground Truth by Month (temporal bias analysis)
+{
+  "2025-10": {
+    "yes_rate": 0.5647058823529412,
+    "total": 85
+  },
+  "2025-11": {
+    "yes_rate": 0.33488372093023255,
+    "total": 215
+  }
+}
+
+### Category Distribution
+- Number of Categories: 13
+- Shannon Entropy: 3.01 bits (higher = more diverse)
+- Largest Category: Sports
+- Smallest Category: Science and Technology
+- Distribution:
+{
+  "Sports": 83,
+  "Politics": 55,
+  "Entertainment": 47,
+  "Companies": 30,
+  "Elections": 24,
+  "Mentions": 19,
+  "Crypto": 11,
+  "Climate and Weather": 9,
+  "Financials": 8,
+  "World": 6,
+  "Economics": 4,
+  "Social": 3,
+  "Science and Technology": 1
+}
+
+### Question Complexity Analysis
+- Question Length: mean=61, median=58, std=26 characters
+- Description Length: mean=442, median=406 characters  
+- Total Vocabulary: 2,224 unique words
+- Avg Words per Question: 85.8
+
+## Writing Instructions
+
+Write a formal Dataset section (2-3 paragraphs) suitable for NeurIPS Datasets & Benchmarks covering:
+
+**Paragraph 1: Data Collection & Source**
+- Describe Kalshi as the data source (CFTC-regulated, real money)
+- Explain why prediction markets are valuable for forecasting evaluation
+- Questions have real-world outcomes that can be objectively verified
+- Mention temporal filtering to prevent data contamination
+
+**Paragraph 2: Dataset Construction & Processing**
+- Describe the two-step dataset creation process:
+  1. Raw data extraction from Kalshi API
+  2. Cleaning, deduplication, and standardization into KalshiBench dataset
+- Explain that dataset is deduplicated by series_ticker to avoid related questions
+- Note that only resolved binary yes/no markets are included
+
+**Paragraph 3: Dataset Statistics & Characteristics**
+- Report key statistics (size, categories, temporal span)
+- Discuss label distribution and potential biases
+- Describe question complexity metrics
+- Note the category diversity (entropy measure)
+
+**Key Points to Emphasize:**
+1. Real-world grounding: Questions have real monetary stakes
+2. Temporal integrity: Knowledge cutoff prevents memorization
+3. Clean evaluation: Pre-processed, deduplicated dataset
+4. Diversity: Multiple categories spanning politics, economics, science, etc.
+
+Create a summary statistics table with the most important metrics.

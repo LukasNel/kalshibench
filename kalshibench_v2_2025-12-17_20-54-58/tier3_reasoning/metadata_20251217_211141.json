@@ -1,0 +1,47 @@
+{
+  "benchmark": "KalshiBench",
+  "version": "1.0",
+  "timestamp": "20251217_211141",
+  "config": {
+    "dataset_name": "2084Collective/kalshibench-v2",
+    "knowledge_cutoff": "2025-10-01",
+    "num_samples": 300,
+    "output_dir": "/neurips_results/kalshibench_v2_2025-12-17_20-54-58/tier3_reasoning",
+    "seed": 42,
+    "max_concurrent": 5,
+    "confidence_bins": 10,
+    "use_raw_dataset": false,
+    "raw_dataset_name": "2084Collective/prediction-markets-historical-v5-cleaned"
+  },
+  "num_questions": 300,
+  "knowledge_cutoff_used": "2025-10-01",
+  "model_knowledge_cutoffs": {
+    "GPT-5.1-High": "2025-08-01",
+    "GPT-5.2": "2025-10-01",
+    "GPT-5.2-High": "2025-10-01",
+    "o1": "2024-10-01"
+  },
+  "categories": [
+    "Crypto",
+    "Social",
+    "Financials",
+    "Climate and Weather",
+    "Mentions",
+    "Elections",
+    "Sports",
+    "Companies",
+    "Politics",
+    "World",
+    "Economics",
+    "Entertainment",
+    "Science and Technology"
+  ],
+  "date_range": {
+    "earliest": "2025-10-01T03:59:00Z",
+    "latest": "2025-11-16T23:00:00Z"
+  },
+  "ground_truth_distribution": {
+    "yes": 120,
+    "no": 180
+  }
+}

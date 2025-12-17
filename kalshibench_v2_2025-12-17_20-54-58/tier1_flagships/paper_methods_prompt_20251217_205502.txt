@@ -1,0 +1,191 @@
+You are a scientific writer preparing the Methods section for a NeurIPS Datasets & Benchmarks paper.
+
+## Benchmark: KalshiBench
+
+## DATASET ANALYSIS (Critical for Paper)
+
+### Temporal Characteristics
+- Date Range: 2025-10-01T03:59:00Z to 2025-11-16T23:00:00Z
+- Temporal Span: 46 days
+- Time Horizon (days from cutoff to resolution):
+  - Mean: 34.0 days
+  - Median: 37.0 days
+  - Range: 2 - 46 days
+
+### Ground Truth Analysis
+- Overall Yes Rate: 40.0%
+- Yes: 120, No: 180
+- Ground Truth by Category:
+{
+  "Sports": {
+    "yes": 29,
+    "no": 54,
+    "total": 83,
+    "yes_rate": 0.3493975903614458
+  },
+  "Elections": {
+    "yes": 5,
+    "no": 19,
+    "total": 24,
+    "yes_rate": 0.20833333333333334
+  },
+  "Entertainment": {
+    "yes": 17,
+    "no": 30,
+    "total": 47,
+    "yes_rate": 0.3617021276595745
+  },
+  "Climate and Weather": {
+    "yes": 3,
+    "no": 6,
+    "total": 9,
+    "yes_rate": 0.3333333333333333
+  },
+  "Companies": {
+    "yes": 18,
+    "no": 12,
+    "total": 30,
+    "yes_rate": 0.6
+  },
+  "Mentions": {
+    "yes": 7,
+    "no": 12,
+    "total": 19,
+    "yes_rate": 0.3684210526315789
+  },
+  "Politics": {
+    "yes": 29,
+    "no": 26,
+    "total": 55,
+    "yes_rate": 0.5272727272727272
+  },
+  "Financials": {
+    "yes": 1,
+    "no": 7,
+    "total": 8,
+    "yes_rate": 0.125
+  },
+  "World": {
+    "yes": 3,
+    "no": 3,
+    "total": 6,
+    "yes_rate": 0.5
+  },
+  "Crypto": {
+    "yes": 3,
+    "no": 8,
+    "total": 11,
+    "yes_rate": 0.2727272727272727
+  },
+  "Social": {
+    "yes": 2,
+    "no": 1,
+    "total": 3,
+    "yes_rate": 0.6666666666666666
+  },
+  "Economics": {
+    "yes": 2,
+    "no": 2,
+    "total": 4,
+    "yes_rate": 0.5
+  },
+  "Science and Technology": {
+    "yes": 1,
+    "no": 0,
+    "total": 1,
+    "yes_rate": 1.0
+  }
+}
+
+### Category Distribution
+- Number of Categories: 13
+- Category Entropy: 3.01 bits (measures diversity)
+- Largest Category: Sports
+- Smallest Category: Science and Technology
+- Full Distribution:
+{
+  "Sports": 83,
+  "Politics": 55,
+  "Entertainment": 47,
+  "Companies": 30,
+  "Elections": 24,
+  "Mentions": 19,
+  "Crypto": 11,
+  "Climate and Weather": 9,
+  "Financials": 8,
+  "World": 6,
+  "Economics": 4,
+  "Social": 3,
+  "Science and Technology": 1
+}
+
+### Question Complexity
+- Question Length: mean=61, median=58, std=26 chars
+- Description Length: mean=442, median=406 chars
+- Vocabulary Size: 2,224 unique words
+- Avg Words per Question: 85.8
+
+
+### Data Source
+- Platform: Kalshi (CFTC-regulated prediction market)
+- Dataset: 2084Collective/kalshibench-v2
+- Total questions evaluated: 300
+
+### Temporal Filtering
+- Knowledge cutoff: 2025-10-01
+- All questions resolve AFTER this date to prevent memorization
+- This is critical for fair evaluation of models with different training cutoffs
+
+### Categories Present
+[
+  "Crypto",
+  "Social",
+  "Financials",
+  "Climate and Weather",
+  "Mentions",
+  "Elections",
+  "Sports",
+  "Companies",
+  "Politics",
+  "World",
+  "Economics",
+  "Entertainment",
+  "Science and Technology"
+]
+
+### Ground Truth Distribution
+- Yes: 120
+- No: 180
+
+### Evaluation Protocol
+1. Each model receives the question text and description
+2. Models must provide:
+   - Binary prediction (yes/no)
+   - Confidence score (0-100%)
+   - Reasoning
+3. Responses parsed using XML tags: <think>, <answer>, <confidence>
+
+### Metrics
+**Classification:**
+- Accuracy, Precision, Recall, F1 (per-class and macro)
+
+**Calibration:**
+- Brier Score: Mean squared error between predicted probability and outcome
+- Brier Skill Score: Improvement over climatological baseline
+- ECE (Expected Calibration Error): Weighted average of |confidence - accuracy| per bin
+- MCE (Maximum Calibration Error): Worst-calibrated bin
+- ACE (Adaptive Calibration Error): ECE with equal-mass bins
+- Log Loss: Cross-entropy loss (penalizes confident wrong predictions)
+
+**Confidence Analysis:**
+- Overconfidence rates at 70%, 80%, 90% thresholds
+- Average confidence when correct vs wrong
+
+### Models Evaluated
+[]
+
+Write a formal Methods section (3-4 paragraphs) suitable for NeurIPS covering:
+1. Benchmark construction and rationale (USE THE DATASET ANALYSIS STATS!)
+2. Evaluation protocol and metrics
+3. Model selection criteria
+4. Description of the dataset characteristics (temporal span, category diversity, question complexity)

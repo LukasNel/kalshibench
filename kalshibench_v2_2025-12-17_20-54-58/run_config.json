@@ -1,0 +1,55 @@
+{
+  "timestamp": "20251217_205458",
+  "num_samples": 300,
+  "model_tiers": {
+    "tier1_flagships": [
+      "gpt-5.2-xhigh",
+      "claude-opus-4.5",
+      "qwen3-235b-thinking",
+      "deepseek-v3.2",
+      "kimi-k2"
+    ],
+    "tier2_midtier": [
+      "gpt-4o",
+      "gpt-5.1",
+      "claude-sonnet-4.5",
+      "claude-4-5-sonnet",
+      "qwen3-235b"
+    ],
+    "tier3_reasoning": [
+      "gpt-5.2",
+      "o1"
+    ],
+    "tier4_budget": [
+      "gpt-5.2-low",
+      "gpt-5-mini",
+      "gpt-5-nano",
+      "gpt-4o-mini",
+      "claude-4-5-haiku",
+      "qwen-2.5-7b",
+      "llama-3.1-8b"
+    ]
+  },
+  "all_models": [
+    "gpt-5.2-xhigh",
+    "claude-opus-4.5",
+    "qwen3-235b-thinking",
+    "deepseek-v3.2",
+    "kimi-k2",
+    "gpt-4o",
+    "gpt-5.1",
+    "claude-sonnet-4.5",
+    "claude-4-5-sonnet",
+    "qwen3-235b",
+    "gpt-5.2",
+    "o1",
+    "gpt-5.2-low",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-4o-mini",
+    "claude-4-5-haiku",
+    "qwen-2.5-7b",
+    "llama-3.1-8b"
+  ],
+  "previous_run_dir": "/neurips_results/kalshibench_v2_2025-12-17_20-11-23"
+}
